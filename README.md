@@ -133,3 +133,8 @@ GEMINI_API_KEY=...
 - **AI 提供商**: OpenAI 兼容 / Claude / Google Gemini
 - **流式**: Server-Sent Events (SSE)
 - **Node 版本要求**: 18+ (内置 fetch)
+
+下一步计划：
+1.完善术前讨论，手术记录，出院小结等等病史的ai化，
+2.tts语音实时输入，真正对话方式输入原始病历资料
+3.支持接入移动端，比如微信、qq、imessage等等
