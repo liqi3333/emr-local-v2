@@ -20,10 +20,30 @@ const FIRST_COURSE_LABELS = {
   exam: '体格检查',
   lab: '辅助检查',
   diag: '初步诊断',
+  workup: '拟诊讨论',
   diff: '鉴别诊断',
   plan: '治疗计划',
 };
-const FIRST_COURSE_KEYS = ['chief', 'hpi', 'past', 'exam', 'lab', 'diag', 'diff', 'plan'];
+const FIRST_COURSE_KEYS = ['chief', 'hpi', 'past', 'exam', 'lab', 'diag', 'workup', 'diff', 'plan'];
+
+/** Ensure a value is a displayable string (convert arrays/objects) */
+function _normalizeValue(v) {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) {
+    return v.map(item => {
+      if (typeof item === 'string') return item;
+      if (typeof item === 'object' && item !== null) {
+        return Object.values(item).join('：');
+      }
+      return String(item);
+    }).join('\n');
+  }
+  if (typeof v === 'object') {
+    return JSON.stringify(v, null, 2);
+  }
+  return String(v);
+}
 
 /** Display labels for 主治医师首次查房病程录 fields */
 const ATTENDING_LABELS = {
@@ -56,11 +76,46 @@ const PREOP_LABELS = {
 };
 const PREOP_KEYS = ['preopDiagnosis', 'preopIndication', 'preopPlan', 'preopPreparation', 'preopRisk', 'preopSigned'];
 
+/** Display labels for 术前讨论 fields */
+const DISCUSSION_LABELS = {
+  discussionParticipants: '参加人员',
+  discussionCaseSummary: '病例摘要',
+  discussionDiagnosis: '诊断',
+  discussionContent: '讨论内容',
+  discussionConclusion: '讨论结论',
+  discussionSigned: '记录者签名',
+};
+const DISCUSSION_KEYS = ['discussionParticipants', 'discussionCaseSummary', 'discussionDiagnosis', 'discussionContent', 'discussionConclusion', 'discussionSigned'];
+
+/** Display labels for 手术记录 fields */
+const SURGERY_LABELS = {
+  surgeryName: '手术名称',
+  surgerySurgeon: '手术者',
+  surgeryAssistant: '助手',
+  surgeryAnesthesia: '麻醉方式',
+  surgeryProcess: '手术经过',
+  surgeryFindings: '术中发现',
+  surgerySigned: '手术者签名',
+};
+const SURGERY_KEYS = ['surgeryName', 'surgerySurgeon', 'surgeryAssistant', 'surgeryAnesthesia', 'surgeryProcess', 'surgeryFindings', 'surgerySigned'];
+
+/** Display labels for 出院小结 fields */
+const DISCHARGE_LABELS = {
+  dischargeAdmissionDate: '入院日期',
+  dischargeDate: '出院日期',
+  dischargeDiagnosis: '出院诊断',
+  dischargeTreatment: '治疗经过',
+  dischargeOutcome: '出院情况',
+  dischargeAdvice: '出院医嘱',
+  dischargeSigned: '主治医师签名',
+};
+const DISCHARGE_KEYS = ['dischargeAdmissionDate', 'dischargeDate', 'dischargeDiagnosis', 'dischargeTreatment', 'dischargeOutcome', 'dischargeAdvice', 'dischargeSigned'];
+
 export class EmrPreview {
   constructor(containerEl) {
     this.el = containerEl;
     this._unsub = [];
-    this._activeTab = 'firstCourse'; // 'firstCourse' | 'attendingRound' | 'chiefRound' | 'preop'
+    this._activeTab = 'firstCourse'; // 'firstCourse' | 'attendingRound' | 'chiefRound' | 'preop' | 'discussion' | 'surgery' | 'discharge'
   }
 
   render() {
@@ -108,6 +163,21 @@ export class EmrPreview {
       })
     );
     this._unsub.push(
+      store.subscribe('discussionData', () => {
+        if (this._activeTab === 'discussion') this._renderActiveTab();
+      })
+    );
+    this._unsub.push(
+      store.subscribe('surgeryData', () => {
+        if (this._activeTab === 'surgery') this._renderActiveTab();
+      })
+    );
+    this._unsub.push(
+      store.subscribe('dischargeData', () => {
+        if (this._activeTab === 'discharge') this._renderActiveTab();
+      })
+    );
+    this._unsub.push(
       store.subscribe('currentDisease', () => this._renderActiveTab())
     );
     this._unsub.push(
@@ -120,31 +190,34 @@ export class EmrPreview {
     const attendingPreview = document.getElementById('attendingPreview');
     const chiefPreview = document.getElementById('chiefPreview');
     const preopPreview = document.getElementById('preopPreview');
+    const discussionPreview = document.getElementById('discussionPreview');
+    const surgeryPreview = document.getElementById('surgeryPreview');
+    const dischargePreview = document.getElementById('dischargePreview');
+
+    const allPreviews = [emrPreview, attendingPreview, chiefPreview, preopPreview, discussionPreview, surgeryPreview, dischargePreview];
+    allPreviews.forEach(p => p.style.display = 'none');
 
     if (this._activeTab === 'firstCourse') {
       emrPreview.style.display = '';
-      attendingPreview.style.display = 'none';
-      chiefPreview.style.display = 'none';
-      preopPreview.style.display = 'none';
       this._renderFirstCourse(emrPreview);
     } else if (this._activeTab === 'attendingRound') {
-      emrPreview.style.display = 'none';
       attendingPreview.style.display = '';
-      chiefPreview.style.display = 'none';
-      preopPreview.style.display = 'none';
       this._renderAttendingRound(attendingPreview);
     } else if (this._activeTab === 'chiefRound') {
-      emrPreview.style.display = 'none';
-      attendingPreview.style.display = 'none';
       chiefPreview.style.display = '';
-      preopPreview.style.display = 'none';
       this._renderChiefRound(chiefPreview);
-    } else {
-      emrPreview.style.display = 'none';
-      attendingPreview.style.display = 'none';
-      chiefPreview.style.display = 'none';
+    } else if (this._activeTab === 'preop') {
       preopPreview.style.display = '';
       this._renderPreop(preopPreview);
+    } else if (this._activeTab === 'discussion') {
+      discussionPreview.style.display = '';
+      this._renderDiscussion(discussionPreview);
+    } else if (this._activeTab === 'surgery') {
+      surgeryPreview.style.display = '';
+      this._renderSurgery(surgeryPreview);
+    } else if (this._activeTab === 'discharge') {
+      dischargePreview.style.display = '';
+      this._renderDischarge(dischargePreview);
     }
   }
 
@@ -207,7 +280,7 @@ export class EmrPreview {
 
     for (const key of FIRST_COURSE_KEYS) {
       const label = FIRST_COURSE_LABELS[key] || key;
-      const value = emrData[key] || '';
+      const value = _normalizeValue(emrData[key]);
 
       const section = document.createElement('div');
       section.className = 'emr-section';
@@ -257,6 +330,7 @@ export class EmrPreview {
     const toolbar = document.createElement('div');
     toolbar.className = 'emr-toolbar';
     toolbar.innerHTML = `
+      <button class="btn-primary" data-action="regenerate">🔄 重新生成</button>
       <button data-action="save">💾 保存记录</button>
       <button data-action="history">📋 查看历史</button>
       <button data-action="export">📄 导出 PDF</button>
@@ -267,7 +341,8 @@ export class EmrPreview {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === 'save') this._saveRecord();
+      if (action === 'regenerate') this._regenerate();
+      else if (action === 'save') this._saveRecord();
       else if (action === 'history') this._showHistory();
       else if (action === 'export') window.print();
     });
@@ -287,7 +362,7 @@ export class EmrPreview {
       placeholder.className = 'emr-placeholder';
       placeholder.innerHTML = `
         <div class="icon">📋</div>
-        <div>选择疾病后自动生成</div>
+        <div>点击上方按钮生成病历</div>
         <div style="font-size:12px;color:var(--text-muted)">主治医师首次查房病程记录</div>
       `;
       container.appendChild(placeholder);
@@ -300,7 +375,7 @@ export class EmrPreview {
 
     for (const key of ATTENDING_KEYS) {
       const label = ATTENDING_LABELS[key] || key;
-      const value = attendingData[key] || '';
+      const value = _normalizeValue(attendingData[key]);
 
       const section = document.createElement('div');
       section.className = 'emr-section';
@@ -378,7 +453,7 @@ export class EmrPreview {
       placeholder.className = 'emr-placeholder';
       placeholder.innerHTML = `
         <div class="icon">📋</div>
-        <div>选择疾病后点击"加载模板"</div>
+        <div>选择疾病后自动生成</div>
         <div style="font-size:12px;color:var(--text-muted)">主任医师首次查房病程记录</div>
       `;
       container.appendChild(placeholder);
@@ -391,7 +466,7 @@ export class EmrPreview {
 
     for (const key of CHIEF_KEYS) {
       const label = CHIEF_LABELS[key] || key;
-      const value = chiefData[key] || '';
+      const value = _normalizeValue(chiefData[key]);
 
       const section = document.createElement('div');
       section.className = 'emr-section';
@@ -482,7 +557,7 @@ export class EmrPreview {
 
     for (const key of PREOP_KEYS) {
       const label = PREOP_LABELS[key] || key;
-      const value = preopData[key] || '';
+      const value = _normalizeValue(preopData[key]);
 
       const section = document.createElement('div');
       section.className = 'emr-section';
@@ -519,6 +594,267 @@ export class EmrPreview {
   }
 
   // ──────────────────────────────────────────────
+  //  术前讨论
+  // ──────────────────────────────────────────────
+
+  _renderDiscussion(container) {
+    const discussionData = store.state.discussionData;
+    const loading = store.state.loading;
+
+    container.innerHTML = '';
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'emr-toolbar';
+    toolbar.innerHTML = `
+      <button data-action="save">💾 保存记录</button>
+      <button data-action="history">📋 查看历史</button>
+    `;
+    container.appendChild(toolbar);
+
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'save') this._saveRecord();
+      else if (action === 'history') this._showHistory();
+    });
+
+    if (loading) {
+      const overlay = document.createElement('div');
+      overlay.className = 'loading-overlay';
+      overlay.innerHTML = `<div class="spinner"></div><span style="color:var(--text-secondary)">生成中...</span>`;
+      container.appendChild(overlay);
+      return;
+    }
+
+    if (!discussionData) {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'emr-placeholder';
+      placeholder.innerHTML = `
+        <div class="icon">📋</div>
+        <div>选择疾病后自动生成</div>
+        <div style="font-size:12px;color:var(--text-muted)">术前讨论记录</div>
+      `;
+      container.appendChild(placeholder);
+      return;
+    }
+
+    const content = document.createElement('div');
+    content.className = 'emr-content';
+
+    for (const key of DISCUSSION_KEYS) {
+      const label = DISCUSSION_LABELS[key] || key;
+      const value = _normalizeValue(discussionData[key]);
+
+      const section = document.createElement('div');
+      section.className = 'emr-section';
+      section.dataset.field = key;
+
+      const labelDiv = document.createElement('div');
+      labelDiv.className = 'label';
+      labelDiv.textContent = label;
+      section.appendChild(labelDiv);
+
+      const valueDiv = document.createElement('div');
+      valueDiv.className = 'value';
+      valueDiv.contentEditable = 'true';
+      valueDiv.textContent = value;
+      valueDiv.addEventListener('blur', () => {
+        const newValue = valueDiv.textContent || '';
+        const current = store.state.discussionData;
+        if (current && current[key] !== newValue) {
+          store.setState({ discussionData: { ...current, [key]: newValue } });
+        }
+      });
+      valueDiv.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          valueDiv.blur();
+        }
+      });
+
+      section.appendChild(valueDiv);
+      content.appendChild(section);
+    }
+
+    container.appendChild(content);
+  }
+
+  // ──────────────────────────────────────────────
+  //  手术记录
+  // ──────────────────────────────────────────────
+
+  _renderSurgery(container) {
+    const surgeryData = store.state.surgeryData;
+    const loading = store.state.loading;
+
+    container.innerHTML = '';
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'emr-toolbar';
+    toolbar.innerHTML = `
+      <button data-action="save">💾 保存记录</button>
+      <button data-action="history">📋 查看历史</button>
+    `;
+    container.appendChild(toolbar);
+
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'save') this._saveRecord();
+      else if (action === 'history') this._showHistory();
+    });
+
+    if (loading) {
+      const overlay = document.createElement('div');
+      overlay.className = 'loading-overlay';
+      overlay.innerHTML = `<div class="spinner"></div><span style="color:var(--text-secondary)">生成中...</span>`;
+      container.appendChild(overlay);
+      return;
+    }
+
+    if (!surgeryData) {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'emr-placeholder';
+      placeholder.innerHTML = `
+        <div class="icon">📋</div>
+        <div>选择疾病后自动生成</div>
+        <div style="font-size:12px;color:var(--text-muted)">手术记录</div>
+      `;
+      container.appendChild(placeholder);
+      return;
+    }
+
+    const content = document.createElement('div');
+    content.className = 'emr-content';
+
+    for (const key of SURGERY_KEYS) {
+      const label = SURGERY_LABELS[key] || key;
+      const value = _normalizeValue(surgeryData[key]);
+
+      const section = document.createElement('div');
+      section.className = 'emr-section';
+      section.dataset.field = key;
+
+      const labelDiv = document.createElement('div');
+      labelDiv.className = 'label';
+      labelDiv.textContent = label;
+      section.appendChild(labelDiv);
+
+      const valueDiv = document.createElement('div');
+      valueDiv.className = 'value';
+      valueDiv.contentEditable = 'true';
+      valueDiv.textContent = value;
+      valueDiv.addEventListener('blur', () => {
+        const newValue = valueDiv.textContent || '';
+        const current = store.state.surgeryData;
+        if (current && current[key] !== newValue) {
+          store.setState({ surgeryData: { ...current, [key]: newValue } });
+        }
+      });
+      valueDiv.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          valueDiv.blur();
+        }
+      });
+
+      section.appendChild(valueDiv);
+      content.appendChild(section);
+    }
+
+    container.appendChild(content);
+  }
+
+  // ──────────────────────────────────────────────
+  //  出院小结
+  // ──────────────────────────────────────────────
+
+  _renderDischarge(container) {
+    const dischargeData = store.state.dischargeData;
+    const loading = store.state.loading;
+
+    container.innerHTML = '';
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'emr-toolbar';
+    toolbar.innerHTML = `
+      <button data-action="save">💾 保存记录</button>
+      <button data-action="history">📋 查看历史</button>
+    `;
+    container.appendChild(toolbar);
+
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (action === 'save') this._saveRecord();
+      else if (action === 'history') this._showHistory();
+    });
+
+    if (loading) {
+      const overlay = document.createElement('div');
+      overlay.className = 'loading-overlay';
+      overlay.innerHTML = `<div class="spinner"></div><span style="color:var(--text-secondary)">生成中...</span>`;
+      container.appendChild(overlay);
+      return;
+    }
+
+    if (!dischargeData) {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'emr-placeholder';
+      placeholder.innerHTML = `
+        <div class="icon">📋</div>
+        <div>选择疾病后自动生成</div>
+        <div style="font-size:12px;color:var(--text-muted)">出院小结</div>
+      `;
+      container.appendChild(placeholder);
+      return;
+    }
+
+    const content = document.createElement('div');
+    content.className = 'emr-content';
+
+    for (const key of DISCHARGE_KEYS) {
+      const label = DISCHARGE_LABELS[key] || key;
+      const value = _normalizeValue(dischargeData[key]);
+
+      const section = document.createElement('div');
+      section.className = 'emr-section';
+      section.dataset.field = key;
+
+      const labelDiv = document.createElement('div');
+      labelDiv.className = 'label';
+      labelDiv.textContent = label;
+      section.appendChild(labelDiv);
+
+      const valueDiv = document.createElement('div');
+      valueDiv.className = 'value';
+      valueDiv.contentEditable = 'true';
+      valueDiv.textContent = value;
+      valueDiv.addEventListener('blur', () => {
+        const newValue = valueDiv.textContent || '';
+        const current = store.state.dischargeData;
+        if (current && current[key] !== newValue) {
+          store.setState({ dischargeData: { ...current, [key]: newValue } });
+        }
+      });
+      valueDiv.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          valueDiv.blur();
+        }
+      });
+
+      section.appendChild(valueDiv);
+      content.appendChild(section);
+    }
+
+    container.appendChild(content);
+  }
+
+  // ──────────────────────────────────────────────
   //  Actions
   // ──────────────────────────────────────────────
 
@@ -529,12 +865,25 @@ export class EmrPreview {
     }
     store.setState({ loading: true, loadingLabel: '重新生成中...' });
     try {
-      const result = await api.generateEMR(
-        store.state.currentDisease,
-        store.state.currentPatient || {},
-      );
+      let result;
+      if (this._activeTab === 'attendingRound') {
+        result = await api.generateAttendingRound(
+          store.state.currentDisease,
+          store.state.currentPatient || {},
+          store.state.emrData || {},
+        );
+      } else {
+        result = await api.generateEMR(
+          store.state.currentDisease,
+          store.state.currentPatient || {},
+        );
+      }
       if (result.emr) {
-        store.setState({ emrData: result.emr, loading: false, loadingLabel: '', error: null });
+        if (this._activeTab === 'attendingRound') {
+          store.setState({ attendingData: result.emr, loading: false, loadingLabel: '', error: null });
+        } else {
+          store.setState({ emrData: result.emr, loading: false, loadingLabel: '', error: null });
+        }
         store.toast('success', '病历已更新');
       } else {
         store.setState({ loading: false, loadingLabel: '', error: 'AI 返回空数据，请重试' });
@@ -588,6 +937,7 @@ export class EmrPreview {
           exam: emrData.exam || '',
           lab: emrData.lab || '',
           diag: emrData.diag || '',
+          workup: emrData.workup || '',
           diff: emrData.diff || '',
           plan: emrData.plan || '',
         });
@@ -623,7 +973,7 @@ export class EmrPreview {
           chiefTreatment: chiefData.chiefTreatment || '',
           chiefSigned: chiefData.chiefSigned || '',
         });
-      } else {
+      } else if (this._activeTab === 'preop') {
         const preopData = store.state.preopData;
         if (!preopData) {
           store.toast('error', '没有可保存的病历数据');
@@ -639,6 +989,59 @@ export class EmrPreview {
           preopPreparation: preopData.preopPreparation || '',
           preopRisk: preopData.preopRisk || '',
           preopSigned: preopData.preopSigned || '',
+        });
+      } else if (this._activeTab === 'discussion') {
+        const discussionData = store.state.discussionData;
+        if (!discussionData) {
+          store.toast('error', '没有可保存的病历数据');
+          return;
+        }
+        await db.saveRecord({
+          patientId: patient.id,
+          disease,
+          type: 'discussion',
+          discussionParticipants: discussionData.discussionParticipants || '',
+          discussionCaseSummary: discussionData.discussionCaseSummary || '',
+          discussionDiagnosis: discussionData.discussionDiagnosis || '',
+          discussionContent: discussionData.discussionContent || '',
+          discussionConclusion: discussionData.discussionConclusion || '',
+          discussionSigned: discussionData.discussionSigned || '',
+        });
+      } else if (this._activeTab === 'surgery') {
+        const surgeryData = store.state.surgeryData;
+        if (!surgeryData) {
+          store.toast('error', '没有可保存的病历数据');
+          return;
+        }
+        await db.saveRecord({
+          patientId: patient.id,
+          disease,
+          type: 'surgery',
+          surgeryName: surgeryData.surgeryName || '',
+          surgerySurgeon: surgeryData.surgerySurgeon || '',
+          surgeryAssistant: surgeryData.surgeryAssistant || '',
+          surgeryAnesthesia: surgeryData.surgeryAnesthesia || '',
+          surgeryProcess: surgeryData.surgeryProcess || '',
+          surgeryFindings: surgeryData.surgeryFindings || '',
+          surgerySigned: surgeryData.surgerySigned || '',
+        });
+      } else if (this._activeTab === 'discharge') {
+        const dischargeData = store.state.dischargeData;
+        if (!dischargeData) {
+          store.toast('error', '没有可保存的病历数据');
+          return;
+        }
+        await db.saveRecord({
+          patientId: patient.id,
+          disease,
+          type: 'discharge',
+          dischargeAdmissionDate: dischargeData.dischargeAdmissionDate || '',
+          dischargeDate: dischargeData.dischargeDate || '',
+          dischargeDiagnosis: dischargeData.dischargeDiagnosis || '',
+          dischargeTreatment: dischargeData.dischargeTreatment || '',
+          dischargeOutcome: dischargeData.dischargeOutcome || '',
+          dischargeAdvice: dischargeData.dischargeAdvice || '',
+          dischargeSigned: dischargeData.dischargeSigned || '',
         });
       }
       store.toast('success', '病历已保存');
@@ -680,10 +1083,10 @@ export class EmrPreview {
                     <span class="pm-history-date">${new Date(r.createdAt).toLocaleDateString('zh-CN')}</span>
                   </div>
                   <div class="pm-history-chief">
-                    <span class="pm-history-type ${r.type === 'attendingRound' ? 'pm-type-attending' : r.type === 'chiefRound' ? 'pm-type-chief' : r.type === 'preop' ? 'pm-type-preop' : 'pm-type-first'}">
-                      ${r.type === 'attendingRound' ? '主治查房' : r.type === 'chiefRound' ? '主任查房' : r.type === 'preop' ? '术前小结' : '首次病程'}
+                    <span class="pm-history-type ${r.type === 'attendingRound' ? 'pm-type-attending' : r.type === 'chiefRound' ? 'pm-type-chief' : r.type === 'preop' ? 'pm-type-preop' : r.type === 'discussion' ? 'pm-type-discussion' : r.type === 'surgery' ? 'pm-type-surgery' : r.type === 'discharge' ? 'pm-type-discharge' : 'pm-type-first'}">
+                      ${r.type === 'attendingRound' ? '主治查房' : r.type === 'chiefRound' ? '主任查房' : r.type === 'preop' ? '术前小结' : r.type === 'discussion' ? '术前讨论' : r.type === 'surgery' ? '手术记录' : r.type === 'discharge' ? '出院小结' : '首次病程'}
                     </span>
-                    ${r.chief || (r.diagnosis ? r.diagnosis.substring(0, 20) : r.chiefDiagnosis ? r.chiefDiagnosis.substring(0, 20) : r.preopDiagnosis ? r.preopDiagnosis.substring(0, 20) : '无内容')}
+                    ${r.chief || (r.diagnosis ? r.diagnosis.substring(0, 20) : r.chiefDiagnosis ? r.chiefDiagnosis.substring(0, 20) : r.preopDiagnosis ? r.preopDiagnosis.substring(0, 20) : r.discussionDiagnosis ? r.discussionDiagnosis.substring(0, 20) : r.surgeryName ? r.surgeryName.substring(0, 20) : r.dischargeDiagnosis ? r.dischargeDiagnosis.substring(0, 20) : '无内容')}
                   </div>
                   <div class="pm-history-actions">
                     <button class="pm-btn pm-btn-sm pm-btn-load" data-id="${r.id}">加载</button>
@@ -745,6 +1148,41 @@ export class EmrPreview {
                   preopSigned: record.preopSigned || '',
                 }
               });
+            } else if (record.type === 'discussion') {
+              store.setState({
+                discussionData: {
+                  discussionParticipants: record.discussionParticipants || '',
+                  discussionCaseSummary: record.discussionCaseSummary || '',
+                  discussionDiagnosis: record.discussionDiagnosis || '',
+                  discussionContent: record.discussionContent || '',
+                  discussionConclusion: record.discussionConclusion || '',
+                  discussionSigned: record.discussionSigned || '',
+                }
+              });
+            } else if (record.type === 'surgery') {
+              store.setState({
+                surgeryData: {
+                  surgeryName: record.surgeryName || '',
+                  surgerySurgeon: record.surgerySurgeon || '',
+                  surgeryAssistant: record.surgeryAssistant || '',
+                  surgeryAnesthesia: record.surgeryAnesthesia || '',
+                  surgeryProcess: record.surgeryProcess || '',
+                  surgeryFindings: record.surgeryFindings || '',
+                  surgerySigned: record.surgerySigned || '',
+                }
+              });
+            } else if (record.type === 'discharge') {
+              store.setState({
+                dischargeData: {
+                  dischargeAdmissionDate: record.dischargeAdmissionDate || '',
+                  dischargeDate: record.dischargeDate || '',
+                  dischargeDiagnosis: record.dischargeDiagnosis || '',
+                  dischargeTreatment: record.dischargeTreatment || '',
+                  dischargeOutcome: record.dischargeOutcome || '',
+                  dischargeAdvice: record.dischargeAdvice || '',
+                  dischargeSigned: record.dischargeSigned || '',
+                }
+              });
             } else {
               store.setState({ emrData: record });
             }
@@ -802,6 +1240,62 @@ export class EmrPreview {
                   analysis: record.analysis || '',
                   treatment: record.treatment || '',
                   signed: record.signed || '',
+                }
+              });
+            } else if (record.type === 'chiefRound') {
+              store.setState({
+                chiefData: {
+                  chiefSummary: record.chiefSummary || '',
+                  chiefDiagnosis: record.chiefDiagnosis || '',
+                  chiefAnalysis: record.chiefAnalysis || '',
+                  chiefTreatment: record.chiefTreatment || '',
+                  chiefSigned: record.chiefSigned || '',
+                }
+              });
+            } else if (record.type === 'preop') {
+              store.setState({
+                preopData: {
+                  preopDiagnosis: record.preopDiagnosis || '',
+                  preopIndication: record.preopIndication || '',
+                  preopPlan: record.preopPlan || '',
+                  preopPreparation: record.preopPreparation || '',
+                  preopRisk: record.preopRisk || '',
+                  preopSigned: record.preopSigned || '',
+                }
+              });
+            } else if (record.type === 'discussion') {
+              store.setState({
+                discussionData: {
+                  discussionParticipants: record.discussionParticipants || '',
+                  discussionCaseSummary: record.discussionCaseSummary || '',
+                  discussionDiagnosis: record.discussionDiagnosis || '',
+                  discussionContent: record.discussionContent || '',
+                  discussionConclusion: record.discussionConclusion || '',
+                  discussionSigned: record.discussionSigned || '',
+                }
+              });
+            } else if (record.type === 'surgery') {
+              store.setState({
+                surgeryData: {
+                  surgeryName: record.surgeryName || '',
+                  surgerySurgeon: record.surgerySurgeon || '',
+                  surgeryAssistant: record.surgeryAssistant || '',
+                  surgeryAnesthesia: record.surgeryAnesthesia || '',
+                  surgeryProcess: record.surgeryProcess || '',
+                  surgeryFindings: record.surgeryFindings || '',
+                  surgerySigned: record.surgerySigned || '',
+                }
+              });
+            } else if (record.type === 'discharge') {
+              store.setState({
+                dischargeData: {
+                  dischargeAdmissionDate: record.dischargeAdmissionDate || '',
+                  dischargeDate: record.dischargeDate || '',
+                  dischargeDiagnosis: record.dischargeDiagnosis || '',
+                  dischargeTreatment: record.dischargeTreatment || '',
+                  dischargeOutcome: record.dischargeOutcome || '',
+                  dischargeAdvice: record.dischargeAdvice || '',
+                  dischargeSigned: record.dischargeSigned || '',
                 }
               });
             } else {

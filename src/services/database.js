@@ -43,6 +43,7 @@ class EMRDatabase {
         patientId TEXT NOT NULL,
         disease TEXT NOT NULL,
         type TEXT DEFAULT 'firstCourse',
+        content TEXT DEFAULT '{}',
         chief TEXT DEFAULT '',
         hpi TEXT DEFAULT '',
         past TEXT DEFAULT '',
@@ -51,6 +52,7 @@ class EMRDatabase {
         diag TEXT DEFAULT '',
         diff TEXT DEFAULT '',
         plan TEXT DEFAULT '',
+        workup TEXT DEFAULT '',
         summary TEXT DEFAULT '',
         diagnosis TEXT DEFAULT '',
         analysis TEXT DEFAULT '',
@@ -67,6 +69,26 @@ class EMRDatabase {
         preopPreparation TEXT DEFAULT '',
         preopRisk TEXT DEFAULT '',
         preopSigned TEXT DEFAULT '',
+        discussionParticipants TEXT DEFAULT '',
+        discussionCaseSummary TEXT DEFAULT '',
+        discussionDiagnosis TEXT DEFAULT '',
+        discussionContent TEXT DEFAULT '',
+        discussionConclusion TEXT DEFAULT '',
+        discussionSigned TEXT DEFAULT '',
+        surgeryName TEXT DEFAULT '',
+        surgerySurgeon TEXT DEFAULT '',
+        surgeryAssistant TEXT DEFAULT '',
+        surgeryAnesthesia TEXT DEFAULT '',
+        surgeryProcess TEXT DEFAULT '',
+        surgeryFindings TEXT DEFAULT '',
+        surgerySigned TEXT DEFAULT '',
+        dischargeAdmissionDate TEXT DEFAULT '',
+        dischargeDate TEXT DEFAULT '',
+        dischargeDiagnosis TEXT DEFAULT '',
+        dischargeTreatment TEXT DEFAULT '',
+        dischargeOutcome TEXT DEFAULT '',
+        dischargeAdvice TEXT DEFAULT '',
+        dischargeSigned TEXT DEFAULT '',
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (patientId) REFERENCES patients(id) ON DELETE CASCADE
@@ -77,6 +99,10 @@ class EMRDatabase {
       CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(createdAt);
       CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(createdAt);
     `);
+    // Add workup column for existing databases
+    try {
+      this._db.exec('ALTER TABLE records ADD COLUMN workup TEXT DEFAULT \'\'');
+    } catch { /* column already exists */ }
   }
 
   _ensureSampleData() {
@@ -177,11 +203,15 @@ class EMRDatabase {
 
     if (existing) {
       this._db.prepare(`
-        UPDATE records SET disease = ?, type = ?, chief = ?, hpi = ?, past = ?, 
-        exam = ?, lab = ?, diag = ?, diff = ?, plan = ?,
+        UPDATE records SET disease = ?, type = ?, 
+        chief = ?, hpi = ?, past = ?, exam = ?, lab = ?, diag = ?, diff = ?, plan = ?, workup = ?,
         summary = ?, diagnosis = ?, analysis = ?, treatment = ?, signed = ?,
         chiefSummary = ?, chiefDiagnosis = ?, chiefAnalysis = ?, chiefTreatment = ?, chiefSigned = ?,
-        preopDiagnosis = ?, preopIndication = ?, preopPlan = ?, preopPreparation = ?, preopRisk = ?, preopSigned = ?, updatedAt = ?
+        preopDiagnosis = ?, preopIndication = ?, preopPlan = ?, preopPreparation = ?, preopRisk = ?, preopSigned = ?,
+        discussionParticipants = ?, discussionCaseSummary = ?, discussionDiagnosis = ?, discussionContent = ?, discussionConclusion = ?, discussionSigned = ?,
+        surgeryName = ?, surgerySurgeon = ?, surgeryAssistant = ?, surgeryAnesthesia = ?, surgeryProcess = ?, surgeryFindings = ?, surgerySigned = ?,
+        dischargeAdmissionDate = ?, dischargeDate = ?, dischargeDiagnosis = ?, dischargeTreatment = ?, dischargeOutcome = ?, dischargeAdvice = ?, dischargeSigned = ?,
+        updatedAt = ?
         WHERE id = ?
       `).run(
         record.disease,
@@ -194,6 +224,7 @@ class EMRDatabase {
         record.diag || '',
         record.diff || '',
         record.plan || '',
+        record.workup || '',
         record.summary || '',
         record.diagnosis || '',
         record.analysis || '',
@@ -210,18 +241,39 @@ class EMRDatabase {
         record.preopPreparation || '',
         record.preopRisk || '',
         record.preopSigned || '',
+        record.discussionParticipants || '',
+        record.discussionCaseSummary || '',
+        record.discussionDiagnosis || '',
+        record.discussionContent || '',
+        record.discussionConclusion || '',
+        record.discussionSigned || '',
+        record.surgeryName || '',
+        record.surgerySurgeon || '',
+        record.surgeryAssistant || '',
+        record.surgeryAnesthesia || '',
+        record.surgeryProcess || '',
+        record.surgeryFindings || '',
+        record.surgerySigned || '',
+        record.dischargeAdmissionDate || '',
+        record.dischargeDate || '',
+        record.dischargeDiagnosis || '',
+        record.dischargeTreatment || '',
+        record.dischargeOutcome || '',
+        record.dischargeAdvice || '',
+        record.dischargeSigned || '',
         now,
         id
       );
     } else {
       this._db.prepare(`
-        INSERT INTO records (id, patientId, disease, type, chief, hpi, past, exam, lab, diag, diff, plan, summary, diagnosis, analysis, treatment, signed, chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned, preopDiagnosis, preopIndication, preopPlan, preopPreparation, preopRisk, preopSigned, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO records (id, patientId, disease, type, content, chief, hpi, past, exam, lab, diag, diff, plan, workup, summary, diagnosis, analysis, treatment, signed, chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned, preopDiagnosis, preopIndication, preopPlan, preopPreparation, preopRisk, preopSigned, discussionParticipants, discussionCaseSummary, discussionDiagnosis, discussionContent, discussionConclusion, discussionSigned, surgeryName, surgerySurgeon, surgeryAssistant, surgeryAnesthesia, surgeryProcess, surgeryFindings, surgerySigned, dischargeAdmissionDate, dischargeDate, dischargeDiagnosis, dischargeTreatment, dischargeOutcome, dischargeAdvice, dischargeSigned, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         record.patientId,
         record.disease,
         record.type || 'firstCourse',
+        JSON.stringify(this._buildRecordContent(record)),
         record.chief || '',
         record.hpi || '',
         record.past || '',
@@ -230,6 +282,7 @@ class EMRDatabase {
         record.diag || '',
         record.diff || '',
         record.plan || '',
+        record.workup || '',
         record.summary || '',
         record.diagnosis || '',
         record.analysis || '',
@@ -246,12 +299,107 @@ class EMRDatabase {
         record.preopPreparation || '',
         record.preopRisk || '',
         record.preopSigned || '',
+        record.discussionParticipants || '',
+        record.discussionCaseSummary || '',
+        record.discussionDiagnosis || '',
+        record.discussionContent || '',
+        record.discussionConclusion || '',
+        record.discussionSigned || '',
+        record.surgeryName || '',
+        record.surgerySurgeon || '',
+        record.surgeryAssistant || '',
+        record.surgeryAnesthesia || '',
+        record.surgeryProcess || '',
+        record.surgeryFindings || '',
+        record.surgerySigned || '',
+        record.dischargeAdmissionDate || '',
+        record.dischargeDate || '',
+        record.dischargeDiagnosis || '',
+        record.dischargeTreatment || '',
+        record.dischargeOutcome || '',
+        record.dischargeAdvice || '',
+        record.dischargeSigned || '',
         now,
         now
       );
     }
 
     return id;
+  }
+
+  _buildRecordContent(record) {
+    const type = record.type || 'firstCourse';
+    
+    switch (type) {
+      case 'firstCourse':
+        return {
+          chief: record.chief || '',
+          hpi: record.hpi || '',
+          past: record.past || '',
+          exam: record.exam || '',
+          lab: record.lab || '',
+          diag: record.diag || '',
+          workup: record.workup || '',
+          diff: record.diff || '',
+          plan: record.plan || ''
+        };
+      case 'attendingRound':
+        return {
+          summary: record.summary || '',
+          diagnosis: record.diagnosis || '',
+          analysis: record.analysis || '',
+          treatment: record.treatment || '',
+          signed: record.signed || ''
+        };
+      case 'chiefRound':
+        return {
+          chiefSummary: record.chiefSummary || '',
+          chiefDiagnosis: record.chiefDiagnosis || '',
+          chiefAnalysis: record.chiefAnalysis || '',
+          chiefTreatment: record.chiefTreatment || '',
+          chiefSigned: record.chiefSigned || ''
+        };
+      case 'preop':
+        return {
+          preopDiagnosis: record.preopDiagnosis || '',
+          preopIndication: record.preopIndication || '',
+          preopPlan: record.preopPlan || '',
+          preopPreparation: record.preopPreparation || '',
+          preopRisk: record.preopRisk || '',
+          preopSigned: record.preopSigned || ''
+        };
+      case 'discussion':
+        return {
+          discussionParticipants: record.discussionParticipants || '',
+          discussionCaseSummary: record.discussionCaseSummary || '',
+          discussionDiagnosis: record.discussionDiagnosis || '',
+          discussionContent: record.discussionContent || '',
+          discussionConclusion: record.discussionConclusion || '',
+          discussionSigned: record.discussionSigned || ''
+        };
+      case 'surgery':
+        return {
+          surgeryName: record.surgeryName || '',
+          surgerySurgeon: record.surgerySurgeon || '',
+          surgeryAssistant: record.surgeryAssistant || '',
+          surgeryAnesthesia: record.surgeryAnesthesia || '',
+          surgeryProcess: record.surgeryProcess || '',
+          surgeryFindings: record.surgeryFindings || '',
+          surgerySigned: record.surgerySigned || ''
+        };
+      case 'discharge':
+        return {
+          dischargeAdmissionDate: record.dischargeAdmissionDate || '',
+          dischargeDate: record.dischargeDate || '',
+          dischargeDiagnosis: record.dischargeDiagnosis || '',
+          dischargeTreatment: record.dischargeTreatment || '',
+          dischargeOutcome: record.dischargeOutcome || '',
+          dischargeAdvice: record.dischargeAdvice || '',
+          dischargeSigned: record.dischargeSigned || ''
+        };
+      default:
+        return {};
+    }
   }
 
   deleteRecord(id) {

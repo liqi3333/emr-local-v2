@@ -1296,6 +1296,21 @@ kbd {
   color: #2e7d32;
 }
 
+.pm-type-discussion {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.pm-type-surgery {
+  background: #fce4ec;
+  color: #c62828;
+}
+
+.pm-type-discharge {
+  background: #f3e5f5;
+  color: #6a1b9a;
+}
+
 .pm-history-actions {
   display: flex;
   gap: 8px;
@@ -1600,6 +1615,9 @@ kbd {
 .pane-tabs {
   display: flex;
   gap: 4px;
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pane-tab {

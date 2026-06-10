@@ -1339,24 +1339,6 @@ const ALIASES = {
 };
 
 /**
- * 根据疾病名称获取模板
- * 支持精确匹配和别名匹配
- * @param {string} diseaseName
- * @returns {object|null}
- */
-function getTemplate(diseaseName) {
-  return TEMPLATES[diseaseName] || TEMPLATES[ALIASES[diseaseName]] || null;
-}
-
-/**
- * 获取所有可用模板的疾病名称列表
- * @returns {string[]}
- */
-function getTemplateDiseases() {
-  return Object.keys(TEMPLATES);
-}
-
-/**
  * 主治医师首次查房病程记录模板
  */
 const ATTENDING_TEMPLATES = {
@@ -1443,6 +1425,94 @@ const PREOP_TEMPLATES = {
 };
 
 /**
+ * 术前讨论模板
+ */
+const DISCUSSION_TEMPLATES = {
+  '腹股沟疝': {
+    discussionParticipants: `主持人：XXX主治医师
+参加人员：XXX住院医师、XXX住院医师、XXX护士长`,
+    discussionCaseSummary: `患者XXX，男，XX岁，因"发现右侧腹股沟区可复性肿物X年"入院。
+查体：右侧腹股沟区可触及一约Xcm×Xcm的椭圆形肿物，质软，边界清楚，无明显压痛，站立或咳嗽时突出明显，平卧后可还纳腹腔。
+辅助检查：B超提示右侧腹股沟斜疝。`,
+    discussionDiagnosis: `右侧腹股沟斜疝`,
+    discussionContent: `XXX住院医师汇报病史：
+患者老年男性，慢性病程。发现右侧腹股沟区可复性肿物X年，站立、行走、咳嗽或用力时突出，平卧或用手按压后可自行回纳。近X月来肿物逐渐增大，伴局部坠胀不适及牵涉痛。入院后完善相关检查，无明显手术禁忌。
+
+XXX主治医师分析：
+1. 诊断明确，具有手术指征
+2. 拟行右侧腹股沟疝无张力修补术（Lichtenstein术）
+3. 麻醉方式：椎管内麻醉或局部浸润麻醉
+4. 术中注意保护精索，避免损伤
+
+XXX护士长补充：
+1. 术前宣教到位，患者知情同意
+2. 术前准备完善，备皮、禁食禁饮
+3. 术后注意观察切口及阴囊肿胀情况`,
+    discussionConclusion: `1. 诊断：右侧腹股沟斜疝
+2. 治疗方案：行右侧腹股沟疝无张力修补术（Lichtenstein术）
+3. 麻醉方式：椎管内麻醉或局部浸润麻醉
+4. 术前准备：完善术前检查，备皮，禁食6-8小时，禁饮4小时
+5. 术后处理：切口压沙袋6-12小时，预防性应用抗生素，止痛对症处理`,
+    discussionSigned: `记录者：___________
+日期：____年____月____日`,
+  },
+};
+
+/**
+ * 手术记录模板
+ */
+const SURGERY_TEMPLATES = {
+  '腹股沟疝': {
+    surgeryName: `右侧腹股沟疝无张力修补术（Lichtenstein术）`,
+    surgerySurgeon: `___________（主刀）`,
+    surgeryAssistant: `___________（一助）`,
+    surgeryAnesthesia: `椎管内麻醉`,
+    surgeryProcess: `1. 麻醉成功后，患者取平卧位，常规消毒铺巾。
+2. 取右侧腹股沟斜切口，长约Xcm，逐层切开皮肤、皮下组织、腹外斜肌腱膜，显露腹股沟管。
+3. 游离精索，找到疝囊，见疝囊位于精索前内侧，约Xcm×Xcm大小。
+4. 将疝囊游离至疝囊颈，予4号丝线贯穿结扎疝囊颈，远端疝囊予以旷置。
+5. 取合适尺寸补片，裁剪后置于精索后方，覆盖腹股沟管底壁及内环口周围。
+6. 补片固定于联合肌腱、腹股沟韧带及耻骨结节表面，精索置于补片前方。
+7. 间断缝合腹外斜肌腱膜，重建外环口，可容纳一指尖。
+8. 逐层缝合皮下组织及皮肤，手术结束。`,
+    surgeryFindings: `术中见：
+1. 疝囊位于右侧腹股沟管内，约Xcm×Xcm大小
+2. 疝囊颈较宽，约Xcm
+3. 腹股沟管底壁缺损约Xcm×Xcm
+4. 内环口扩大，约Xcm
+5. 精索结构正常，无粘连
+6. 予无张力修补术，手术顺利，术中出血约Xml`,
+    surgerySigned: `手术者：___________
+日期：____年____月____日____时____分
+手术开始时间：____时____分
+手术结束时间：____时____分
+手术历时：约X小时X分钟`,
+  },
+};
+
+/**
+ * 出院小结模板
+ */
+const DISCHARGE_TEMPLATES = {
+  '腹股沟疝': {
+    dischargeAdmissionDate: `____年____月____日`,
+    dischargeDate: `____年____月____日`,
+    dischargeDiagnosis: `右侧腹股沟斜疝
+右侧腹股沟疝无张力修补术后`,
+    dischargeTreatment: `患者入院后完善相关检查，无明显手术禁忌，于____年____月____日在椎管内麻醉下行"右侧腹股沟疝无张力修补术（Lichtenstein术）"。手术顺利，术后予抗感染、止痛、补液等对症治疗。`,
+    dischargeOutcome: `术后患者一般情况良好，切口愈合良好，无红肿渗液，阴囊无肿胀，排尿正常，大便通畅。患者诉切口轻微疼痛，可耐受。术后第X天复查血常规、肝肾功能未见明显异常。`,
+    dischargeAdvice: `1. 出院后注意休息，避免剧烈运动及重体力劳动3个月
+2. 保持大便通畅，避免咳嗽等增加腹压的因素
+3. 切口处保持清洁干燥，术后7天拆线
+4. 如出现切口红肿、发热、阴囊肿胀等异常情况，及时就诊
+5. 术后1个月、3个月、6个月门诊复查
+6. 饮食清淡，加强营养，促进伤口愈合`,
+    dischargeSigned: `主治医师签名：___________
+日期：____年____月____日`,
+  },
+};
+
+/**
  * 根据疾病名称获取首次病程录模板
  */
 function getTemplate(diseaseName) {
@@ -1471,12 +1541,38 @@ function getPreopTemplate(diseaseName) {
 }
 
 /**
+ * 根据疾病名称获取术前讨论模板
+ */
+function getDiscussionTemplate(diseaseName) {
+  return DISCUSSION_TEMPLATES[diseaseName] || DISCUSSION_TEMPLATES[ALIASES[diseaseName]] || null;
+}
+
+/**
+ * 根据疾病名称获取手术记录模板
+ */
+function getSurgeryTemplate(diseaseName) {
+  return SURGERY_TEMPLATES[diseaseName] || SURGERY_TEMPLATES[ALIASES[diseaseName]] || null;
+}
+
+/**
+ * 根据疾病名称获取出院小结模板
+ */
+function getDischargeTemplate(diseaseName) {
+  return DISCHARGE_TEMPLATES[diseaseName] || DISCHARGE_TEMPLATES[ALIASES[diseaseName]] || null;
+}
+
+/**
  * 获取所有可用模板的疾病名称列表
- * @returns {string[]}
  */
 function getTemplateDiseases() {
   return Object.keys(TEMPLATES);
 }
 
-module.exports = { getTemplate, getAttendingTemplate, getChiefTemplate, getPreopTemplate, getTemplateDiseases, TEMPLATES, ATTENDING_TEMPLATES, CHIEF_TEMPLATES, PREOP_TEMPLATES };
+module.exports = { 
+  getTemplate, getAttendingTemplate, getChiefTemplate, getPreopTemplate,
+  getDiscussionTemplate, getSurgeryTemplate, getDischargeTemplate,
+  getTemplateDiseases, 
+  TEMPLATES, ATTENDING_TEMPLATES, CHIEF_TEMPLATES, PREOP_TEMPLATES,
+  DISCUSSION_TEMPLATES, SURGERY_TEMPLATES, DISCHARGE_TEMPLATES
+};
 

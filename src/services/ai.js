@@ -298,63 +298,7 @@ async function* readSSEStream(body, provider) {
 //  Exported API
 // ──────────────────────────────────────────────
 
-/**
- * Non-streaming AI call.
- * Returns the full response text.
- */
-const { getTemplate } = require("../data/templates");
-
-/** Mock response for when no API key is configured */
-function mockCallAI(messages) {
-  // Extract the last user message or system prompt
-  const lastMsg = messages
-    .filter((m) => m.role === "user" || m.role === "system")
-    .pop();
-  const text = lastMsg?.content || "";
-
-  // If the prompt looks like an EMR generation request, return structured JSON
-  if (
-    text.includes("电子病历") ||
-    text.includes("主诉") ||
-    text.includes("chief")
-  ) {
-    const diseaseMatch =
-      text.match(/["\u201c\u201d]([^\u201c\u201d"]+)["\u201c\u201d]/) ||
-      text.match(/疾病["\u201c\u201d]?([^，。,.！\n]+)/);
-    const disease = diseaseMatch ? diseaseMatch[1].trim() : "示例疾病";
-
-    // Check for a professional template first
-    const template = getTemplate(disease);
-    if (template) {
-      return JSON.stringify(template);
-    }
-
-    // Fallback to generic mock response
-    return JSON.stringify({
-      chief: `${disease}患者因「腹痛」就诊，疼痛位于右下腹，呈持续性钝痛，伴恶心、呕吐。`,
-      hpi: `患者于3天前无明显诱因出现上腹部隐痛，1天前转移至右下腹，呈持续性钝痛，伴恶心、呕吐2次，为胃内容物。无畏寒、发热。查体：T 37.8℃，右下腹麦氏点压痛阳性，反跳痛阳性。`,
-      past: "既往体健，否认高血压、糖尿病史。否认手术外伤史。否认药物过敏史。",
-      exam: "T 37.8℃ P 88次/分 R 20次/分 BP 120/80mmHg。腹部平坦，未见胃肠蠕动波及腹壁静脉曲张。右下腹麦氏点压痛阳性，反跳痛阳性，腹肌稍紧张。结肠充气试验阳性。",
-      lab: "血常规：WBC 12.5×10^9/L，NEUT% 85%。CRP 35mg/L。腹部B超提示：阑尾增粗，直径约0.8cm，壁厚约0.3cm，可见粪石。",
-      diag: disease,
-      diff: "1. 急性胃肠炎\n2. 右侧输尿管结石\n3. 异位妊娠破裂（育龄期女性）\n4. 肠系膜淋巴结炎",
-      plan: "1. 完善术前检查：凝血功能、心电图、胸片\n2. 急诊行腹腔镜阑尾切除术\n3. 术后抗感染治疗：头孢替安 2g ivgtt bid\n4. 术后禁食、补液、对症支持治疗",
-    });
-  }
-
-  return `（模拟回复）您的问题是：${text.slice(0, 100)}。请在 .env 中配置 API Key 或通过前端界面添加模型以获得 AI 真实回复。`;
-}
-
-/** Mock streaming — yields chunks progressively */
-async function* mockStreamAI(messages) {
-  const full = mockCallAI(messages);
-  // Yield in small chunks to simulate streaming
-  const chunkSize = 3;
-  for (let i = 0; i < full.length; i += chunkSize) {
-    yield full.slice(i, i + chunkSize);
-    await new Promise((r) => setTimeout(r, 15));
-  }
-}
+const { mockCallAI, mockStreamAI } = require("./ai-mock");
 
 function hasApiKey(provider, apiKey) {
   if (provider && resolveProvider(provider) === "ollama") return true;

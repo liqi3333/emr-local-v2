@@ -98,6 +98,20 @@ export async function chatStream(messages, onChunk, overrides = {}) {
 }
 
 /**
+ * Get preop summary template for a disease.
+ * @param {string} disease
+ * @returns {Promise<{template: object|null}>}
+ */
+export async function getPreopTemplate(disease) {
+  const res = await fetchWithTimeout(`${BASE}/templates/preop/${encodeURIComponent(disease)}`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
  * Generate structured EMR for a disease (non-streaming).
  * @param {string} disease
  * @param {object} [patientInfo]
@@ -112,6 +126,35 @@ export async function generateEMR(disease, patientInfo = {}, overrides = {}) {
     body: JSON.stringify({
       disease,
       patientInfo,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Generate structured attending round record (non-streaming).
+ * @param {string} disease
+ * @param {object} [patientInfo]
+ * @param {object} [overrides]
+ * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
+ */
+export async function generateAttendingRound(disease, patientInfo = {}, emrData = {}, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/attending/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      disease,
+      patientInfo,
+      emrData,
       provider: overrides.provider || cfg?.provider,
       model: overrides.model || cfg?.model,
       apiKey: overrides.apiKey || cfg?.apiKey,
@@ -244,12 +287,40 @@ export async function getChiefTemplate(disease) {
 }
 
 /**
- * Get preop summary template for a disease.
+ * Get discussion template for a disease.
  * @param {string} disease
  * @returns {Promise<{template: object|null}>}
  */
-export async function getPreopTemplate(disease) {
-  const res = await fetchWithTimeout(`${BASE}/templates/preop/${encodeURIComponent(disease)}`, {}, TIMEOUT);
+export async function getDiscussionTemplate(disease) {
+  const res = await fetchWithTimeout(`${BASE}/templates/discussion/${encodeURIComponent(disease)}`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Get surgery template for a disease.
+ * @param {string} disease
+ * @returns {Promise<{template: object|null}>}
+ */
+export async function getSurgeryTemplate(disease) {
+  const res = await fetchWithTimeout(`${BASE}/templates/surgery/${encodeURIComponent(disease)}`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Get discharge template for a disease.
+ * @param {string} disease
+ * @returns {Promise<{template: object|null}>}
+ */
+export async function getDischargeTemplate(disease) {
+  const res = await fetchWithTimeout(`${BASE}/templates/discharge/${encodeURIComponent(disease)}`, {}, TIMEOUT);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `HTTP ${res.status}`);

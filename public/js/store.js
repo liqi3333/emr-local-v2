@@ -12,6 +12,9 @@ class Store {
       attendingData: null,    // { summary, diagnosis, analysis, treatment, signed } or null
       chiefData: null,        // { chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned } or null
       preopData: null,        // { preopDiagnosis, preopIndication, preopPlan, preopPreparation, preopRisk, preopSigned } or null
+      discussionData: null,   // { discussionParticipants, discussionCaseSummary, discussionDiagnosis, discussionContent, discussionConclusion, discussionSigned } or null
+      surgeryData: null,      // { surgeryName, surgerySurgeon, surgeryAssistant, surgeryAnesthesia, surgeryProcess, surgeryFindings, surgerySigned } or null
+      dischargeData: null,    // { dischargeAdmissionDate, dischargeDate, dischargeDiagnosis, dischargeTreatment, dischargeOutcome, dischargeAdvice, dischargeSigned } or null
       chatMessages: [],       // [{ role, content, timestamp }]
       loading: false,         // boolean
       loadingLabel: '',       // e.g. "生成病历中..."

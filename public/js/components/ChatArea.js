@@ -127,13 +127,34 @@ export class ChatArea {
       let systemContent = `当前患者疾病：${store.state.currentDisease}。`;
       const emr = store.state.emrData;
       if (emr) {
-        systemContent += `\n当前病历内容：\n${JSON.stringify(emr, null, 2)}`;
+        systemContent += `\n当前病历内容（首次病程录）：\n${JSON.stringify(emr, null, 2)}`;
       }
-      systemContent += `\n\n请以主治医师身份回答，结合患者病情给出专业建议。
-如果用户要求修改病历中的某项内容，请在回复末尾添加以下格式的 JSON 代码块（只包含需要修改的字段）：
+      systemContent += `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改病历。
+
+如果用户要求修改病历，请严格按以下步骤执行：
+
+**步骤1：修改用户指定的字段**
+
+**步骤2：检查联动字段，如有必要一并更新**
+- 修改"既往史"（past）→ 同步更新"诊断"（diag）中的伴发诊断
+- 修改"主诉/体格检查/辅助检查"（chief/exam/lab）→ 同步更新"拟诊讨论"（workup）中的对应部分
+- 修改"诊断"（diag）→ 检查"鉴别诊断"（diff）和"治疗计划"（plan）是否需要调整
+- 修改"既往史/诊断" → 检查"鉴别诊断"（diff）是否需要排除或新增
+
+**步骤3：全局一致性复审**
+通读全部 9 个字段，检查是否有前后矛盾、数据不一致之处，如有则修正。
+
+**步骤4：保持格式**
+确保每个字段保持"1. 内容\\n2. 内容"的序号分行格式。
+
+**原则：最小改动**
+只修改与用户要求直接相关的字段。没有医学上必要关联的字段不要动。如你认为某个非指定字段需要同步更新，请在正文中用一句话说明原因。
+
+在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：
 \`\`\`json
-{"chief": "修改后的主诉内容"}
-\`\`\``;
+{"chief": "修改后完整内容", "diag": "修改后完整内容"}
+\`\`\`
+如果没有任何字段被修改，则不要输出 JSON 代码块。`;
       apiMessages.unshift({ role: 'system', content: systemContent });
     }
 
@@ -210,7 +231,7 @@ export class ChatArea {
     }
 
     // 3. Update emrData — merge fields, only overwrite what the AI returned
-    if (!parsed || !(parsed.chief || parsed.hpi || parsed.diag || parsed.plan)) return;
+    if (!parsed) return;
     const current = store.state.emrData || {};
     store.setState({ emrData: { ...current, ...parsed } });
     store.toast('info', '病历已更新');

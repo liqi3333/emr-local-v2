@@ -127,7 +127,15 @@ router.get('/records/:id', (req, res) => {
  */
 router.post('/records', (req, res) => {
   try {
-    const { patientId, disease, type, chief, hpi, past, exam, lab, diag, diff, plan, summary, diagnosis, analysis, treatment, signed, chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned, preopDiagnosis, preopIndication, preopPlan, preopPreparation, preopRisk, preopSigned, id } = req.body;
+    const { patientId, disease, type, 
+      chief, hpi, past, exam, lab, diag, workup, diff, plan, 
+      summary, diagnosis, analysis, treatment, signed, 
+      chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned, 
+      preopDiagnosis, preopIndication, preopPlan, preopPreparation, preopRisk, preopSigned,
+      discussionParticipants, discussionCaseSummary, discussionDiagnosis, discussionContent, discussionConclusion, discussionSigned,
+      surgeryName, surgerySurgeon, surgeryAssistant, surgeryAnesthesia, surgeryProcess, surgeryFindings, surgerySigned,
+      dischargeAdmissionDate, dischargeDate, dischargeDiagnosis, dischargeTreatment, dischargeOutcome, dischargeAdvice, dischargeSigned,
+      id } = req.body;
 
     if (!patientId || !disease) {
       return res.status(400).json({ error: 'patientId and disease are required' });
@@ -150,6 +158,7 @@ router.post('/records', (req, res) => {
       exam: exam || '',
       lab: lab || '',
       diag: diag || '',
+      workup: workup || '',
       diff: diff || '',
       plan: plan || '',
       summary: summary || '',
@@ -168,6 +177,26 @@ router.post('/records', (req, res) => {
       preopPreparation: preopPreparation || '',
       preopRisk: preopRisk || '',
       preopSigned: preopSigned || '',
+      discussionParticipants: discussionParticipants || '',
+      discussionCaseSummary: discussionCaseSummary || '',
+      discussionDiagnosis: discussionDiagnosis || '',
+      discussionContent: discussionContent || '',
+      discussionConclusion: discussionConclusion || '',
+      discussionSigned: discussionSigned || '',
+      surgeryName: surgeryName || '',
+      surgerySurgeon: surgerySurgeon || '',
+      surgeryAssistant: surgeryAssistant || '',
+      surgeryAnesthesia: surgeryAnesthesia || '',
+      surgeryProcess: surgeryProcess || '',
+      surgeryFindings: surgeryFindings || '',
+      surgerySigned: surgerySigned || '',
+      dischargeAdmissionDate: dischargeAdmissionDate || '',
+      dischargeDate: dischargeDate || '',
+      dischargeDiagnosis: dischargeDiagnosis || '',
+      dischargeTreatment: dischargeTreatment || '',
+      dischargeOutcome: dischargeOutcome || '',
+      dischargeAdvice: dischargeAdvice || '',
+      dischargeSigned: dischargeSigned || '',
     });
 
     const record = db.getRecordById(recordId);

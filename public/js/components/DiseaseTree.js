@@ -203,11 +203,41 @@ export class DiseaseTree {
           console.warn('Failed to fetch preop template:', e);
         }
 
+        // Fetch discussion template
+        let discussionData = null;
+        try {
+          const discussionResult = await api.getDiscussionTemplate(diseaseName);
+          discussionData = discussionResult.template;
+        } catch (e) {
+          console.warn('Failed to fetch discussion template:', e);
+        }
+
+        // Fetch surgery template
+        let surgeryData = null;
+        try {
+          const surgeryResult = await api.getSurgeryTemplate(diseaseName);
+          surgeryData = surgeryResult.template;
+        } catch (e) {
+          console.warn('Failed to fetch surgery template:', e);
+        }
+
+        // Fetch discharge template
+        let dischargeData = null;
+        try {
+          const dischargeResult = await api.getDischargeTemplate(diseaseName);
+          dischargeData = dischargeResult.template;
+        } catch (e) {
+          console.warn('Failed to fetch discharge template:', e);
+        }
+
         store.setState({
           emrData: emr,
           attendingData: attendingData,
           chiefData: chiefData,
           preopData: preopData,
+          discussionData: discussionData,
+          surgeryData: surgeryData,
+          dischargeData: dischargeData,
           loading: false,
           loadingLabel: "",
           error: null,
