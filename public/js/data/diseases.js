@@ -65,7 +65,7 @@ export const DISEASE_CATEGORIES = [
     color: '#fefce8',
     textColor: '#854d0e',
     bgColor: '#fefce8',
-    diseases: ['腹股沟疝', '股疝', '脐疝', '切口疝'],
+    diseases: ['腹股沟疝', '股疝', '脐疝', '切口疝', '造口旁疝'],
   },
   {
     name: '创伤',

@@ -204,6 +204,8 @@ router.post('/attending/generate', async (req, res) => {
 以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：
 
 {
+  "supplementHistory": "补充病史（根据首次病程录中现病史部分，补充追问得到的病史细节，包括起病情况、症状演变、诊治经过等；如无补充可写\"无特殊补充\"）",
+
   "summary": "病情摘要（基于首次病程录精炼概括，每条一行，前面加数字序号。①患者基本信息——姓名、性别、年龄、床号；②入院日期、入院诊断；③主诉；④现病史摘要；⑤专科查体要点；⑥辅助检查关键阳性结果；⑦目前治疗方案及效果）",
 
   "diagnosis": "诊断（在首次病程录诊断基础上，结合查房时的新信息确认或修正，分两部分写，每条一行，前面加数字序号。①主要疾病诊断——规范全称，注明侧别、分期、分型、并发症；②伴发诊断——逐条列出所有并存疾病。所有诊断须在病史体查中有依据）",
@@ -228,6 +230,11 @@ router.post('/attending/generate', async (req, res) => {
     try {
       const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
       emr = JSON.parse(cleaned);
+      // Ensure all expected fields exist (AI may omit some)
+      if (emr && typeof emr === 'object') {
+        const defaults = { supplementHistory: '', summary: '', diagnosis: '', analysis: '', treatment: '', signed: '' };
+        emr = { ...defaults, ...emr };
+      }
       // Normalize all fields to strings
       if (emr && typeof emr === 'object') {
         for (const [k, v] of Object.entries(emr)) {
@@ -255,6 +262,505 @@ router.post('/attending/generate', async (req, res) => {
     res.json({ content, emr });
   } catch (err) {
     console.error('[POST /api/attending/generate]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+//  POST /api/chief/generate  –  Generate chief round record
+// ──────────────────────────────────────────────
+router.post('/chief/generate', async (req, res) => {
+  try {
+    const {
+      disease,
+      patientInfo = {},
+      emrData = {},
+      attendingData = {},
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+    } = req.body;
+
+    if (!disease) {
+      return res.status(400).json({ error: 'disease is required' });
+    }
+
+    const patientContext = Object.keys(patientInfo).length
+      ? `\n患者基本信息：${JSON.stringify(patientInfo, null, 2)}`
+      : '';
+
+    const emrContext = Object.keys(emrData).length
+      ? `\n首次病程录内容：\n${JSON.stringify(emrData, null, 2)}`
+      : '';
+
+    const attendingContext = Object.keys(attendingData).length
+      ? `\n主治医师查房记录：\n${JSON.stringify(attendingData, null, 2)}`
+      : '';
+
+    const systemPrompt = `你是一位经验丰富的普外科主任医师。请基于以下病历资料，生成一份主任医师首次查房病程记录。${patientContext}${emrContext}${attendingContext}
+
+以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：
+
+{
+  "chiefSummary": "病情摘要（综合首次病程录和主治查房内容，精炼概括，每条一行，前面加数字序号。①患者基本信息；②入院日期、入院诊断；③主诉；④现病史摘要；⑤专科查体要点；⑥辅助检查关键阳性结果；⑦目前治疗方案及效果）",
+
+  "chiefDiagnosis": "诊断（在主治查房诊断基础上，结合主任查房时的新信息确认或修正，分两部分写，每条一行，前面加数字序号。①主要疾病诊断——规范全称，注明侧别、分期、分型、并发症；②伴发诊断——逐条列出所有并存疾病）",
+
+  "chiefAnalysis": "分析（体现主任医师的专业判断深度，每条一行，前面加数字序号。①本病诊断依据——从病史、查体、辅查三方面综合分析；②鉴别诊断——逐个排除，说明排除依据；③病情严重程度评估——有无并发症风险、是否需要手术；④治疗反应评估——对目前治疗的反应和调整建议）",
+
+  "chiefTreatment": "诊疗计划（基于分析结果，给出具体可执行的计划，每条一行，前面加数字序号。①完善检查；②手术方式探讨——手术适应症、禁忌症、推荐术式及理由；③调整治疗——是否需要调整用药或手术方案；④术前准备；⑤术后处理；⑥出院计划）",
+
+  "chiefSigned": "医师签名（留空，由医生自行填写）"
+}
+
+确保内容专业、准确、符合临床规范，体现主任医师的专业判断深度和指导性意见，所有字段互相对应、逻辑自洽。`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `请为"${disease}"生成主任医师首次查房病程记录。` },
+    ];
+
+    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
+
+    let emr;
+    try {
+      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
+      emr = JSON.parse(cleaned);
+      // Ensure all expected fields exist (AI may omit some)
+      if (emr && typeof emr === 'object') {
+        const defaults = { chiefSummary: '', chiefDiagnosis: '', chiefAnalysis: '', chiefTreatment: '', chiefSigned: '' };
+        emr = { ...defaults, ...emr };
+      }
+      // Normalize all fields to strings
+      if (emr && typeof emr === 'object') {
+        for (const [k, v] of Object.entries(emr)) {
+          if (v == null) {
+            emr[k] = '';
+          } else if (!(typeof v === 'string')) {
+            if (Array.isArray(v)) {
+              emr[k] = v.map(item => {
+                if (typeof item === 'string') return item;
+                if (typeof item === 'object' && item !== null) {
+                  return Object.values(item).join('：');
+                }
+                return String(item);
+              }).join('\n');
+            } else {
+              emr[k] = JSON.stringify(v, null, 2);
+            }
+          }
+        }
+      }
+    } catch {
+      return res.json({ content, emr: null, parseError: true });
+    }
+
+    res.json({ content, emr });
+  } catch (err) {
+    console.error('[POST /api/chief/generate]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+//  POST /api/preop/generate  –  Generate preop summary (术前小结)
+// ──────────────────────────────────────────────
+router.post('/preop/generate', async (req, res) => {
+  try {
+    const {
+      disease,
+      patientInfo = {},
+      emrData = {},
+      attendingData = {},
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+    } = req.body;
+
+    if (!disease) {
+      return res.status(400).json({ error: 'disease is required' });
+    }
+
+    const patientContext = Object.keys(patientInfo).length
+      ? `\n患者基本信息：${JSON.stringify(patientInfo, null, 2)}`
+      : '';
+
+    const emrContext = Object.keys(emrData).length
+      ? `\n首次病程录内容：\n${JSON.stringify(emrData, null, 2)}`
+      : '';
+
+    const attendingContext = Object.keys(attendingData).length
+      ? `\n主治医师查房记录：\n${JSON.stringify(attendingData, null, 2)}`
+      : '';
+
+    const systemPrompt = `你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前小结。${patientContext}${emrContext}${attendingContext}
+
+以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：
+
+{
+  "preopDiagnosis": "术前诊断（规范全称，注明侧别、分型。如：右侧腹股沟斜疝）",
+
+  "preopIndication": "手术指征（逐条列出，每条一行，前面加数字序号。①病史特点——症状持续时间、进展；②查体发现——肿物大小、可复性；③辅助检查——B超等影像结果；④综合评估——诊断明确，具有手术指征）",
+
+  "preopPlan": "手术方案（每条一行，前面加数字序号。①手术名称——规范术式全称；②麻醉方式——椎管内麻醉/全麻等；③手术目的——修补缺损等；④手术风险——出血、感染等主要风险；⑤预计手术时间；⑥预计住院时间）",
+
+  "preopPreparation": "术前准备（每条一行，前面加数字序号。①完善检查——血常规、凝血、心电图等；②备皮；③禁食禁饮时间；④抗生素皮试；⑤签署知情同意书）",
+
+  "preopRisk": "风险评估（每条一行，前面加数字序号。①麻醉风险；②手术主要风险；③术后风险；④患者一般情况评估；⑤综合风险等级——低/中/高）",
+
+  "preopSigned": "医师签名（留空，由医生自行填写）"
+}
+
+确保内容专业、准确、符合临床规范，体现术前评估的完整性和严谨性，所有字段互相对应、逻辑自洽。`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `请为"${disease}"生成术前小结。` },
+    ];
+
+    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
+
+    let emr;
+    try {
+      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
+      emr = JSON.parse(cleaned);
+      if (emr && typeof emr === 'object') {
+        const defaults = { preopDiagnosis: '', preopIndication: '', preopPlan: '', preopPreparation: '', preopRisk: '', preopSigned: '' };
+        emr = { ...defaults, ...emr };
+      }
+      if (emr && typeof emr === 'object') {
+        for (const [k, v] of Object.entries(emr)) {
+          if (v == null) {
+            emr[k] = '';
+          } else if (!(typeof v === 'string')) {
+            if (Array.isArray(v)) {
+              emr[k] = v.map(item => {
+                if (typeof item === 'string') return item;
+                if (typeof item === 'object' && item !== null) {
+                  return Object.values(item).join('：');
+                }
+                return String(item);
+              }).join('\n');
+            } else {
+              emr[k] = JSON.stringify(v, null, 2);
+            }
+          }
+        }
+      }
+    } catch {
+      return res.json({ content, emr: null, parseError: true });
+    }
+
+    res.json({ content, emr });
+  } catch (err) {
+    console.error('[POST /api/preop/generate]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+//  POST /api/discussion/generate  –  Generate preop discussion (术前讨论)
+// ──────────────────────────────────────────────
+router.post('/discussion/generate', async (req, res) => {
+  try {
+    const {
+      disease,
+      patientInfo = {},
+      emrData = {},
+      attendingData = {},
+      preopData = {},
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+    } = req.body;
+
+    if (!disease) {
+      return res.status(400).json({ error: 'disease is required' });
+    }
+
+    const patientContext = Object.keys(patientInfo).length
+      ? `\n患者基本信息：${JSON.stringify(patientInfo, null, 2)}`
+      : '';
+
+    const emrContext = Object.keys(emrData).length
+      ? `\n首次病程录内容：\n${JSON.stringify(emrData, null, 2)}`
+      : '';
+
+    const attendingContext = Object.keys(attendingData).length
+      ? `\n主治医师查房记录：\n${JSON.stringify(attendingData, null, 2)}`
+      : '';
+
+    const preopContext = Object.keys(preopData).length
+      ? `\n术前小结内容：\n${JSON.stringify(preopData, null, 2)}`
+      : '';
+
+    const systemPrompt = `你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前讨论记录。${patientContext}${emrContext}${attendingContext}${preopContext}
+
+以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：
+
+{
+  "discussionParticipants": "参加人员（格式：主持人：XXX主治医师\\n参加人员：XXX住院医师、XXX住院医师、XXX护士长）",
+
+  "discussionCaseSummary": "病例摘要（简明扼要，每条一行，前面加数字序号。①患者基本信息；②主诉；③现病史要点；④查体关键发现；⑤辅助检查结果）",
+
+  "discussionDiagnosis": "诊断（规范全称，如有多个诊断逐条列出）",
+
+  "discussionContent": "讨论内容（体现多位医师的讨论过程，包括：①住院医师汇报病史；②主治医师分析——诊断依据、鉴别诊断、手术方案；③护士长补充——术前宣教、准备情况）",
+
+  "discussionConclusion": "讨论结论（每条一行，前面加数字序号。①最终诊断；②治疗方案——术式选择及理由；③麻醉方式；④术前准备事项；⑤术后处理要点）",
+
+  "discussionSigned": "记录者签名（留空，由医生自行填写）"
+}
+
+确保内容专业、准确、符合临床规范，体现术前讨论的多学科协作和规范化流程，所有字段互相对应、逻辑自洽。`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `请为"${disease}"生成术前讨论记录。` },
+    ];
+
+    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
+
+    let emr;
+    try {
+      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
+      emr = JSON.parse(cleaned);
+      if (emr && typeof emr === 'object') {
+        const defaults = { discussionParticipants: '', discussionCaseSummary: '', discussionDiagnosis: '', discussionContent: '', discussionConclusion: '', discussionSigned: '' };
+        emr = { ...defaults, ...emr };
+      }
+      if (emr && typeof emr === 'object') {
+        for (const [k, v] of Object.entries(emr)) {
+          if (v == null) {
+            emr[k] = '';
+          } else if (!(typeof v === 'string')) {
+            if (Array.isArray(v)) {
+              emr[k] = v.map(item => {
+                if (typeof item === 'string') return item;
+                if (typeof item === 'object' && item !== null) {
+                  return Object.values(item).join('：');
+                }
+                return String(item);
+              }).join('\n');
+            } else {
+              emr[k] = JSON.stringify(v, null, 2);
+            }
+          }
+        }
+      }
+    } catch {
+      return res.json({ content, emr: null, parseError: true });
+    }
+
+    res.json({ content, emr });
+  } catch (err) {
+    console.error('[POST /api/discussion/generate]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+//  POST /api/surgery/generate  –  Generate surgery record (手术记录)
+// ──────────────────────────────────────────────
+router.post('/surgery/generate', async (req, res) => {
+  try {
+    const {
+      disease,
+      patientInfo = {},
+      emrData = {},
+      preopData = {},
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+    } = req.body;
+
+    if (!disease) {
+      return res.status(400).json({ error: 'disease is required' });
+    }
+
+    const patientContext = Object.keys(patientInfo).length
+      ? `\n患者基本信息：${JSON.stringify(patientInfo, null, 2)}`
+      : '';
+
+    const emrContext = Object.keys(emrData).length
+      ? `\n首次病程录内容：\n${JSON.stringify(emrData, null, 2)}`
+      : '';
+
+    const preopContext = Object.keys(preopData).length
+      ? `\n术前小结内容：\n${JSON.stringify(preopData, null, 2)}`
+      : '';
+
+    const systemPrompt = `你是一位经验丰富的普外科手术医师。请基于以下病历资料，生成一份手术记录。${patientContext}${emrContext}${preopContext}
+
+以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：
+
+{
+  "surgeryName": "手术名称（规范全称，如：右侧腹股沟疝无张力修补术（Lichtenstein术））",
+
+  "surgerySurgeon": "手术者（留空，由医生自行填写）",
+
+  "surgeryAssistant": "助手（留空，由医生自行填写）",
+
+  "surgeryAnesthesia": "麻醉方式（如：椎管内麻醉、全麻、局部浸润麻醉）",
+
+  "surgeryProcess": "手术经过（详细描述手术步骤，每步一行，前面加数字序号。①麻醉成功，体位，消毒铺巾；②切口选择、长度、逐层切开；③探查所见；④关键操作步骤——疝囊游离、结扎、补片放置等；⑤缝合各层；⑥手术结束。注意：描述应具体、规范，体现手术操作的专业性）",
+
+  "surgeryFindings": "术中发现（每条一行，前面加数字序号。①病变部位、大小、形态；②与周围组织关系；③术中出血量；④手术是否顺利）",
+
+  "surgerySigned": "手术者签名（留空，由医生自行填写。附手术开始时间、结束时间、历时）"
+}
+
+确保内容专业、准确、符合临床规范，体现手术记录的完整性和规范性，所有字段互相对应、逻辑自洽。`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `请为"${disease}"生成手术记录。` },
+    ];
+
+    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
+
+    let emr;
+    try {
+      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
+      emr = JSON.parse(cleaned);
+      if (emr && typeof emr === 'object') {
+        const defaults = { surgeryName: '', surgerySurgeon: '', surgeryAssistant: '', surgeryAnesthesia: '', surgeryProcess: '', surgeryFindings: '', surgerySigned: '' };
+        emr = { ...defaults, ...emr };
+      }
+      if (emr && typeof emr === 'object') {
+        for (const [k, v] of Object.entries(emr)) {
+          if (v == null) {
+            emr[k] = '';
+          } else if (!(typeof v === 'string')) {
+            if (Array.isArray(v)) {
+              emr[k] = v.map(item => {
+                if (typeof item === 'string') return item;
+                if (typeof item === 'object' && item !== null) {
+                  return Object.values(item).join('：');
+                }
+                return String(item);
+              }).join('\n');
+            } else {
+              emr[k] = JSON.stringify(v, null, 2);
+            }
+          }
+        }
+      }
+    } catch {
+      return res.json({ content, emr: null, parseError: true });
+    }
+
+    res.json({ content, emr });
+  } catch (err) {
+    console.error('[POST /api/surgery/generate]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+//  POST /api/discharge/generate  –  Generate discharge summary (出院小结)
+// ──────────────────────────────────────────────
+router.post('/discharge/generate', async (req, res) => {
+  try {
+    const {
+      disease,
+      patientInfo = {},
+      emrData = {},
+      preopData = {},
+      surgeryData = {},
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+    } = req.body;
+
+    if (!disease) {
+      return res.status(400).json({ error: 'disease is required' });
+    }
+
+    const patientContext = Object.keys(patientInfo).length
+      ? `\n患者基本信息：${JSON.stringify(patientInfo, null, 2)}`
+      : '';
+
+    const emrContext = Object.keys(emrData).length
+      ? `\n首次病程录内容：\n${JSON.stringify(emrData, null, 2)}`
+      : '';
+
+    const preopContext = Object.keys(preopData).length
+      ? `\n术前小结内容：\n${JSON.stringify(preopData, null, 2)}`
+      : '';
+
+    const surgeryContext = Object.keys(surgeryData).length
+      ? `\n手术记录内容：\n${JSON.stringify(surgeryData, null, 2)}`
+      : '';
+
+    const systemPrompt = `你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份出院小结。${patientContext}${emrContext}${preopContext}${surgeryContext}
+
+以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：
+
+{
+  "dischargeAdmissionDate": "入院日期（格式：____年____月____日）",
+
+  "dischargeDate": "出院日期（格式：____年____月____日）",
+
+  "dischargeDiagnosis": "出院诊断（规范全称，如有多个诊断逐条列出。如：右侧腹股沟斜疝\\n右侧腹股沟疝无张力修补术后）",
+
+  "dischargeTreatment": "治疗经过（简明描述入院后诊疗过程：①完善检查；②手术——日期、术式；③术后处理——抗感染、止痛、补液等）",
+
+  "dischargeOutcome": "出院情况（描述患者出院时状态：一般情况、切口愈合、并发症、复查结果等）",
+
+  "dischargeAdvice": "出院医嘱（每条一行，前面加数字序号。①休息与活动限制；②饮食指导；③切口护理与拆线时间；④异常情况就诊指征；⑤复查时间安排；⑥用药指导）",
+
+  "dischargeSigned": "主治医师签名（留空，由医生自行填写）"
+}
+
+确保内容专业、准确、符合临床规范，体现出院评估的完整性和医嘱的可执行性，所有字段互相对应、逻辑自洽。`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `请为"${disease}"生成出院小结。` },
+    ];
+
+    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
+
+    let emr;
+    try {
+      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
+      emr = JSON.parse(cleaned);
+      if (emr && typeof emr === 'object') {
+        const defaults = { dischargeAdmissionDate: '', dischargeDate: '', dischargeDiagnosis: '', dischargeTreatment: '', dischargeOutcome: '', dischargeAdvice: '', dischargeSigned: '' };
+        emr = { ...defaults, ...emr };
+      }
+      if (emr && typeof emr === 'object') {
+        for (const [k, v] of Object.entries(emr)) {
+          if (v == null) {
+            emr[k] = '';
+          } else if (!(typeof v === 'string')) {
+            if (Array.isArray(v)) {
+              emr[k] = v.map(item => {
+                if (typeof item === 'string') return item;
+                if (typeof item === 'object' && item !== null) {
+                  return Object.values(item).join('：');
+                }
+                return String(item);
+              }).join('\n');
+            } else {
+              emr[k] = JSON.stringify(v, null, 2);
+            }
+          }
+        }
+      }
+    } catch {
+      return res.json({ content, emr: null, parseError: true });
+    }
+
+    res.json({ content, emr });
+  } catch (err) {
+    console.error('[POST /api/discharge/generate]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

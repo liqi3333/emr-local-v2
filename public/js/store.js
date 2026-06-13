@@ -23,6 +23,7 @@ class Store {
       records: [],            // EMRRecord[] (loaded from DB)
       searchQuery: '',        // disease search filter
       sidebarCollapsed: false,
+      activeTab: 'firstCourse', // current EMR tab: 'firstCourse'|'attendingRound'|'chiefRound'|'preop'|'discussion'|'surgery'|'discharge'
       toastMessage: null,     // { type: 'success'|'error'|'info', text }
     };
   }

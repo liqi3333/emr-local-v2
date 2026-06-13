@@ -168,6 +168,161 @@ export async function generateAttendingRound(disease, patientInfo = {}, emrData 
   return res.json();
 }
 
+export async function generateChiefRound(disease, patientInfo = {}, emrData = {}, attendingData = {}, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/chief/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      disease,
+      patientInfo,
+      emrData,
+      attendingData,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Generate structured preop summary (术前小结).
+ * @param {string} disease
+ * @param {object} [patientInfo]
+ * @param {object} [emrData]
+ * @param {object} [attendingData]
+ * @param {object} [overrides]
+ * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
+ */
+export async function generatePreop(disease, patientInfo = {}, emrData = {}, attendingData = {}, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/preop/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      disease,
+      patientInfo,
+      emrData,
+      attendingData,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Generate structured preop discussion (术前讨论).
+ * @param {string} disease
+ * @param {object} [patientInfo]
+ * @param {object} [emrData]
+ * @param {object} [attendingData]
+ * @param {object} [preopData]
+ * @param {object} [overrides]
+ * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
+ */
+export async function generateDiscussion(disease, patientInfo = {}, emrData = {}, attendingData = {}, preopData = {}, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/discussion/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      disease,
+      patientInfo,
+      emrData,
+      attendingData,
+      preopData,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Generate structured surgery record (手术记录).
+ * @param {string} disease
+ * @param {object} [patientInfo]
+ * @param {object} [emrData]
+ * @param {object} [preopData]
+ * @param {object} [overrides]
+ * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
+ */
+export async function generateSurgery(disease, patientInfo = {}, emrData = {}, preopData = {}, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/surgery/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      disease,
+      patientInfo,
+      emrData,
+      preopData,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Generate structured discharge summary (出院小结).
+ * @param {string} disease
+ * @param {object} [patientInfo]
+ * @param {object} [emrData]
+ * @param {object} [preopData]
+ * @param {object} [surgeryData]
+ * @param {object} [overrides]
+ * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
+ */
+export async function generateDischarge(disease, patientInfo = {}, emrData = {}, preopData = {}, surgeryData = {}, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/discharge/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      disease,
+      patientInfo,
+      emrData,
+      preopData,
+      surgeryData,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 /**
  * Generate structured EMR with streaming.
  * @param {string} disease

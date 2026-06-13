@@ -122,39 +122,58 @@ export class ChatArea {
       .filter((m) => m.content)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    // Build system context: disease + current EMR data
+    // Build system context: disease + current EMR data based on active tab
     if (store.state.currentDisease) {
       let systemContent = `当前患者疾病：${store.state.currentDisease}。`;
-      const emr = store.state.emrData;
-      if (emr) {
-        systemContent += `\n当前病历内容（首次病程录）：\n${JSON.stringify(emr, null, 2)}`;
+
+      const activeTab = store.state.activeTab || 'firstCourse';
+      let currentData = null;
+      let tabLabel = '';
+      let fieldDesc = '';
+
+      switch (activeTab) {
+        case 'firstCourse':
+          currentData = store.state.emrData;
+          tabLabel = '首次病程录';
+          fieldDesc = '字段说明：\n- chief: 主诉\n- hpi: 现病史\n- past: 既往史\n- exam: 体格检查\n- lab: 辅助检查\n- diag: 初步诊断\n- workup: 拟诊讨论\n- diff: 鉴别诊断\n- plan: 治疗计划';
+          break;
+        case 'attendingRound':
+          currentData = store.state.attendingData;
+          tabLabel = '主治医师首次查房';
+          fieldDesc = '字段说明：\n- supplementHistory: 补充病史\n- summary: 病情摘要\n- diagnosis: 诊断\n- analysis: 病情分析\n- treatment: 诊疗计划\n- signed: 医师签名';
+          break;
+        case 'chiefRound':
+          currentData = store.state.chiefData;
+          tabLabel = '主任医师首次查房';
+          fieldDesc = '字段说明：\n- chiefSummary: 病情摘要\n- chiefDiagnosis: 诊断\n- chiefAnalysis: 病情分析\n- chiefTreatment: 诊疗计划\n- chiefNotes: 主任指示\n- chiefSigned: 医师签名';
+          break;
+        case 'preop':
+          currentData = store.state.preopData;
+          tabLabel = '术前小结';
+          fieldDesc = '字段说明：\n- preopDiagnosis: 术前诊断\n- preopIndication: 手术指征\n- preopPlan: 手术方案\n- preopPreparation: 术前准备\n- preopRisk: 风险评估\n- preopSigned: 医师签名';
+          break;
+        case 'discussion':
+          currentData = store.state.discussionData;
+          tabLabel = '术前讨论';
+          fieldDesc = '字段说明：\n- discussionParticipants: 参加人员\n- discussionCaseSummary: 病例摘要\n- discussionDiagnosis: 诊断\n- discussionContent: 讨论内容\n- discussionConclusion: 讨论结论\n- discussionSigned: 记录者签名';
+          break;
+        case 'surgery':
+          currentData = store.state.surgeryData;
+          tabLabel = '手术记录';
+          fieldDesc = '字段说明：\n- surgeryName: 手术名称\n- surgerySurgeon: 手术者\n- surgeryAssistant: 助手\n- surgeryAnesthesia: 麻醉方式\n- surgeryProcess: 手术经过\n- surgeryFindings: 术中发现\n- surgerySigned: 手术者签名';
+          break;
+        case 'discharge':
+          currentData = store.state.dischargeData;
+          tabLabel = '出院小结';
+          fieldDesc = '字段说明：\n- dischargeAdmissionDate: 入院日期\n- dischargeDate: 出院日期\n- dischargeDiagnosis: 出院诊断\n- dischargeTreatment: 治疗经过\n- dischargeOutcome: 出院情况\n- dischargeAdvice: 出院医嘱\n- dischargeSigned: 主治医师签名';
+          break;
       }
-      systemContent += `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改病历。
 
-如果用户要求修改病历，请严格按以下步骤执行：
+      if (currentData) {
+        systemContent += `\n当前病历内容（${tabLabel}）：\n${JSON.stringify(currentData, null, 2)}`;
+      }
 
-**步骤1：修改用户指定的字段**
-
-**步骤2：检查联动字段，如有必要一并更新**
-- 修改"既往史"（past）→ 同步更新"诊断"（diag）中的伴发诊断
-- 修改"主诉/体格检查/辅助检查"（chief/exam/lab）→ 同步更新"拟诊讨论"（workup）中的对应部分
-- 修改"诊断"（diag）→ 检查"鉴别诊断"（diff）和"治疗计划"（plan）是否需要调整
-- 修改"既往史/诊断" → 检查"鉴别诊断"（diff）是否需要排除或新增
-
-**步骤3：全局一致性复审**
-通读全部 9 个字段，检查是否有前后矛盾、数据不一致之处，如有则修正。
-
-**步骤4：保持格式**
-确保每个字段保持"1. 内容\\n2. 内容"的序号分行格式。
-
-**原则：最小改动**
-只修改与用户要求直接相关的字段。没有医学上必要关联的字段不要动。如你认为某个非指定字段需要同步更新，请在正文中用一句话说明原因。
-
-在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：
-\`\`\`json
-{"chief": "修改后完整内容", "diag": "修改后完整内容"}
-\`\`\`
-如果没有任何字段被修改，则不要输出 JSON 代码块。`;
+      systemContent += `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改【${tabLabel}】的病历。\n\n${fieldDesc}\n\n如果用户要求修改病历，请严格按以下步骤执行：\n\n**步骤1：修改用户指定的字段**\n\n**步骤2：保持格式**\n确保每个字段保持专业医学文书格式。\n\n**原则：最小改动**\n只修改与用户要求直接相关的字段。\n\n在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：\n\`\`\`json\n{"fieldName": "修改后完整内容"}\n\`\`\`\n字段名必须与上方字段说明中的英文名一致。如果没有字段被修改，则不要输出 JSON 代码块。`;
       apiMessages.unshift({ role: 'system', content: systemContent });
     }
 
@@ -230,10 +249,20 @@ export class ChatArea {
       } catch { return; }
     }
 
-    // 3. Update emrData — merge fields, only overwrite what the AI returned
+    // 3. Route parsed data to the correct store state based on active tab
     if (!parsed) return;
-    const current = store.state.emrData || {};
-    store.setState({ emrData: { ...current, ...parsed } });
+    const activeTab = store.state.activeTab || 'firstCourse';
+    const stateKey = {
+      firstCourse: 'emrData',
+      attendingRound: 'attendingData',
+      chiefRound: 'chiefData',
+      preop: 'preopData',
+      discussion: 'discussionData',
+      surgery: 'surgeryData',
+      discharge: 'dischargeData',
+    }[activeTab] || 'emrData';
+    const current = store.state[stateKey] || {};
+    store.setState({ [stateKey]: { ...current, ...parsed } });
     store.toast('info', '病历已更新');
   }
 

@@ -129,7 +129,7 @@ router.post('/records', (req, res) => {
   try {
     const { patientId, disease, type, 
       chief, hpi, past, exam, lab, diag, workup, diff, plan, 
-      summary, diagnosis, analysis, treatment, signed, 
+      summary, supplementHistory, diagnosis, analysis, treatment, signed, 
       chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned, 
       preopDiagnosis, preopIndication, preopPlan, preopPreparation, preopRisk, preopSigned,
       discussionParticipants, discussionCaseSummary, discussionDiagnosis, discussionContent, discussionConclusion, discussionSigned,
@@ -162,6 +162,7 @@ router.post('/records', (req, res) => {
       diff: diff || '',
       plan: plan || '',
       summary: summary || '',
+      supplementHistory: supplementHistory || '',
       diagnosis: diagnosis || '',
       analysis: analysis || '',
       treatment: treatment || '',

@@ -47,13 +47,14 @@ function _normalizeValue(v) {
 
 /** Display labels for 主治医师首次查房病程录 fields */
 const ATTENDING_LABELS = {
+  supplementHistory: '补充病史',
   summary: '病情摘要',
   diagnosis: '诊断',
   analysis: '病情分析',
   treatment: '诊疗计划',
   signed: '医师签名',
 };
-const ATTENDING_KEYS = ['summary', 'diagnosis', 'analysis', 'treatment', 'signed'];
+const ATTENDING_KEYS = ['supplementHistory', 'summary', 'diagnosis', 'analysis', 'treatment', 'signed'];
 
 /** Display labels for 主任医师首次查房病程录 fields */
 const CHIEF_LABELS = {
@@ -136,6 +137,7 @@ export class EmrPreview {
         tab.classList.add('active');
 
         this._activeTab = target;
+        store.setState({ activeTab: target });
         this._renderActiveTab();
       });
     });
@@ -289,6 +291,7 @@ export class EmrPreview {
       const labelDiv = document.createElement('div');
       labelDiv.className = 'label';
       labelDiv.textContent = label;
+      labelDiv.appendChild(this._createCopyBtn(value));
       section.appendChild(labelDiv);
 
       const valueDiv = document.createElement('div');
@@ -384,6 +387,7 @@ export class EmrPreview {
       const labelDiv = document.createElement('div');
       labelDiv.className = 'label';
       labelDiv.textContent = label;
+      labelDiv.appendChild(this._createCopyBtn(value));
       section.appendChild(labelDiv);
 
       const valueDiv = document.createElement('div');
@@ -425,8 +429,10 @@ export class EmrPreview {
     const toolbar = document.createElement('div');
     toolbar.className = 'emr-toolbar';
     toolbar.innerHTML = `
+      <button class="btn-primary" data-action="regenerate">🔄 重新生成</button>
       <button data-action="save">💾 保存记录</button>
       <button data-action="history">📋 查看历史</button>
+      <button data-action="export">📄 导出 PDF</button>
     `;
     container.appendChild(toolbar);
 
@@ -434,8 +440,10 @@ export class EmrPreview {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === 'save') this._saveRecord();
+      if (action === 'regenerate') this._regenerate();
+      else if (action === 'save') this._saveRecord();
       else if (action === 'history') this._showHistory();
+      else if (action === 'export') window.print();
     });
 
     // Loading
@@ -475,6 +483,7 @@ export class EmrPreview {
       const labelDiv = document.createElement('div');
       labelDiv.className = 'label';
       labelDiv.textContent = label;
+      labelDiv.appendChild(this._createCopyBtn(value));
       section.appendChild(labelDiv);
 
       const valueDiv = document.createElement('div');
@@ -516,8 +525,10 @@ export class EmrPreview {
     const toolbar = document.createElement('div');
     toolbar.className = 'emr-toolbar';
     toolbar.innerHTML = `
+      <button class="btn-primary" data-action="regenerate">🔄 重新生成</button>
       <button data-action="save">💾 保存记录</button>
       <button data-action="history">📋 查看历史</button>
+      <button data-action="export">📄 导出 PDF</button>
     `;
     container.appendChild(toolbar);
 
@@ -525,8 +536,10 @@ export class EmrPreview {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === 'save') this._saveRecord();
+      if (action === 'regenerate') this._regenerate();
+      else if (action === 'save') this._saveRecord();
       else if (action === 'history') this._showHistory();
+      else if (action === 'export') window.print();
     });
 
     // Loading
@@ -566,6 +579,7 @@ export class EmrPreview {
       const labelDiv = document.createElement('div');
       labelDiv.className = 'label';
       labelDiv.textContent = label;
+      labelDiv.appendChild(this._createCopyBtn(value));
       section.appendChild(labelDiv);
 
       const valueDiv = document.createElement('div');
@@ -606,8 +620,10 @@ export class EmrPreview {
     const toolbar = document.createElement('div');
     toolbar.className = 'emr-toolbar';
     toolbar.innerHTML = `
+      <button class="btn-primary" data-action="regenerate">🔄 重新生成</button>
       <button data-action="save">💾 保存记录</button>
       <button data-action="history">📋 查看历史</button>
+      <button data-action="export">📄 导出 PDF</button>
     `;
     container.appendChild(toolbar);
 
@@ -615,8 +631,10 @@ export class EmrPreview {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === 'save') this._saveRecord();
+      if (action === 'regenerate') this._regenerate();
+      else if (action === 'save') this._saveRecord();
       else if (action === 'history') this._showHistory();
+      else if (action === 'export') window.print();
     });
 
     if (loading) {
@@ -653,6 +671,7 @@ export class EmrPreview {
       const labelDiv = document.createElement('div');
       labelDiv.className = 'label';
       labelDiv.textContent = label;
+      labelDiv.appendChild(this._createCopyBtn(value));
       section.appendChild(labelDiv);
 
       const valueDiv = document.createElement('div');
@@ -693,8 +712,10 @@ export class EmrPreview {
     const toolbar = document.createElement('div');
     toolbar.className = 'emr-toolbar';
     toolbar.innerHTML = `
+      <button class="btn-primary" data-action="regenerate">🔄 重新生成</button>
       <button data-action="save">💾 保存记录</button>
       <button data-action="history">📋 查看历史</button>
+      <button data-action="export">📄 导出 PDF</button>
     `;
     container.appendChild(toolbar);
 
@@ -702,8 +723,10 @@ export class EmrPreview {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === 'save') this._saveRecord();
+      if (action === 'regenerate') this._regenerate();
+      else if (action === 'save') this._saveRecord();
       else if (action === 'history') this._showHistory();
+      else if (action === 'export') window.print();
     });
 
     if (loading) {
@@ -740,6 +763,7 @@ export class EmrPreview {
       const labelDiv = document.createElement('div');
       labelDiv.className = 'label';
       labelDiv.textContent = label;
+      labelDiv.appendChild(this._createCopyBtn(value));
       section.appendChild(labelDiv);
 
       const valueDiv = document.createElement('div');
@@ -780,8 +804,10 @@ export class EmrPreview {
     const toolbar = document.createElement('div');
     toolbar.className = 'emr-toolbar';
     toolbar.innerHTML = `
+      <button class="btn-primary" data-action="regenerate">🔄 重新生成</button>
       <button data-action="save">💾 保存记录</button>
       <button data-action="history">📋 查看历史</button>
+      <button data-action="export">📄 导出 PDF</button>
     `;
     container.appendChild(toolbar);
 
@@ -789,8 +815,10 @@ export class EmrPreview {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === 'save') this._saveRecord();
+      if (action === 'regenerate') this._regenerate();
+      else if (action === 'save') this._saveRecord();
       else if (action === 'history') this._showHistory();
+      else if (action === 'export') window.print();
     });
 
     if (loading) {
@@ -827,6 +855,7 @@ export class EmrPreview {
       const labelDiv = document.createElement('div');
       labelDiv.className = 'label';
       labelDiv.textContent = label;
+      labelDiv.appendChild(this._createCopyBtn(value));
       section.appendChild(labelDiv);
 
       const valueDiv = document.createElement('div');
@@ -865,25 +894,40 @@ export class EmrPreview {
     }
     store.setState({ loading: true, loadingLabel: '重新生成中...' });
     try {
+      const disease = store.state.currentDisease;
+      const patientInfo = store.state.currentPatient || {};
+      const emrData = store.state.emrData || {};
+      const attendingData = store.state.attendingData || {};
+      const preopData = store.state.preopData || {};
+      const surgeryData = store.state.surgeryData || {};
+
       let result;
       if (this._activeTab === 'attendingRound') {
-        result = await api.generateAttendingRound(
-          store.state.currentDisease,
-          store.state.currentPatient || {},
-          store.state.emrData || {},
-        );
+        result = await api.generateAttendingRound(disease, patientInfo, emrData);
+      } else if (this._activeTab === 'chiefRound') {
+        result = await api.generateChiefRound(disease, patientInfo, emrData, attendingData);
+      } else if (this._activeTab === 'preop') {
+        result = await api.generatePreop(disease, patientInfo, emrData, attendingData);
+      } else if (this._activeTab === 'discussion') {
+        result = await api.generateDiscussion(disease, patientInfo, emrData, attendingData, preopData);
+      } else if (this._activeTab === 'surgery') {
+        result = await api.generateSurgery(disease, patientInfo, emrData, preopData);
+      } else if (this._activeTab === 'discharge') {
+        result = await api.generateDischarge(disease, patientInfo, emrData, preopData, surgeryData);
       } else {
-        result = await api.generateEMR(
-          store.state.currentDisease,
-          store.state.currentPatient || {},
-        );
+        result = await api.generateEMR(disease, patientInfo);
       }
+
       if (result.emr) {
-        if (this._activeTab === 'attendingRound') {
-          store.setState({ attendingData: result.emr, loading: false, loadingLabel: '', error: null });
-        } else {
-          store.setState({ emrData: result.emr, loading: false, loadingLabel: '', error: null });
-        }
+        const storeKey = {
+          attendingRound: 'attendingData',
+          chiefRound: 'chiefData',
+          preop: 'preopData',
+          discussion: 'discussionData',
+          surgery: 'surgeryData',
+          discharge: 'dischargeData',
+        }[this._activeTab] || 'emrData';
+        store.setState({ [storeKey]: result.emr, loading: false, loadingLabel: '', error: null });
         store.toast('success', '病历已更新');
       } else {
         store.setState({ loading: false, loadingLabel: '', error: 'AI 返回空数据，请重试' });
@@ -952,6 +996,7 @@ export class EmrPreview {
           disease,
           type: 'attendingRound',
           summary: attendingData.summary || '',
+          supplementHistory: attendingData.supplementHistory || '',
           diagnosis: attendingData.diagnosis || '',
           analysis: attendingData.analysis || '',
           treatment: attendingData.treatment || '',
@@ -1058,7 +1103,19 @@ export class EmrPreview {
     }
 
     try {
-      const records = await db.getRecords(patient.id);
+      const allRecords = await db.getRecords(patient.id);
+      // Filter records by current tab type
+      const typeMap = {
+        firstCourse: 'firstCourse',
+        attendingRound: 'attendingRound',
+        chiefRound: 'chiefRound',
+        preop: 'preop',
+        discussion: 'discussion',
+        surgery: 'surgery',
+        discharge: 'discharge',
+      };
+      const currentType = typeMap[this._activeTab] || this._activeTab;
+      const records = allRecords.filter(r => r.type === currentType);
 
       const overlay = document.createElement('div');
       overlay.className = 'pm-modal-overlay';
@@ -1121,6 +1178,7 @@ export class EmrPreview {
               store.setState({
                 attendingData: {
                   summary: record.summary || '',
+                  supplementHistory: record.supplementHistory || '',
                   diagnosis: record.diagnosis || '',
                   analysis: record.analysis || '',
                   treatment: record.treatment || '',
@@ -1236,6 +1294,7 @@ export class EmrPreview {
               store.setState({
                 attendingData: {
                   summary: record.summary || '',
+                  supplementHistory: record.supplementHistory || '',
                   diagnosis: record.diagnosis || '',
                   analysis: record.analysis || '',
                   treatment: record.treatment || '',
@@ -1310,6 +1369,27 @@ export class EmrPreview {
     } catch (err) {
       store.toast('error', '加载病历历史失败: ' + err.message);
     }
+  }
+
+  _createCopyBtn(text) {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.title = '复制';
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(text).then(() => {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+          btn.classList.remove('copied');
+        }, 1500);
+      }).catch(() => {
+        store.toast('error', '复制失败');
+      });
+    });
+    return btn;
   }
 
   showHistory() {

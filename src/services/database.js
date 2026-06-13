@@ -9,6 +9,18 @@ const crypto = require('crypto');
 
 const DB_PATH = path.join(__dirname, '../../data/emr-local.db');
 
+// Single source of truth for record columns — add new columns here only
+// INSERT/UPDATE SQL is auto-generated from this array
+const RECORD_DATA_COLUMNS = [
+  'chief', 'hpi', 'past', 'exam', 'lab', 'diag', 'diff', 'plan', 'workup',
+  'summary', 'supplementHistory', 'diagnosis', 'analysis', 'treatment', 'signed',
+  'chiefSummary', 'chiefDiagnosis', 'chiefAnalysis', 'chiefTreatment', 'chiefSigned',
+  'preopDiagnosis', 'preopIndication', 'preopPlan', 'preopPreparation', 'preopRisk', 'preopSigned',
+  'discussionParticipants', 'discussionCaseSummary', 'discussionDiagnosis', 'discussionContent', 'discussionConclusion', 'discussionSigned',
+  'surgeryName', 'surgerySurgeon', 'surgeryAssistant', 'surgeryAnesthesia', 'surgeryProcess', 'surgeryFindings', 'surgerySigned',
+  'dischargeAdmissionDate', 'dischargeDate', 'dischargeDiagnosis', 'dischargeTreatment', 'dischargeOutcome', 'dischargeAdvice', 'dischargeSigned',
+];
+
 class EMRDatabase {
   constructor() {
     this._db = null;
@@ -58,6 +70,7 @@ class EMRDatabase {
         analysis TEXT DEFAULT '',
         treatment TEXT DEFAULT '',
         signed TEXT DEFAULT '',
+        supplementHistory TEXT DEFAULT '',
         chiefSummary TEXT DEFAULT '',
         chiefDiagnosis TEXT DEFAULT '',
         chiefAnalysis TEXT DEFAULT '',
@@ -102,6 +115,10 @@ class EMRDatabase {
     // Add workup column for existing databases
     try {
       this._db.exec('ALTER TABLE records ADD COLUMN workup TEXT DEFAULT \'\'');
+    } catch { /* column already exists */ }
+    // Add supplementHistory column for existing databases
+    try {
+      this._db.exec('ALTER TABLE records ADD COLUMN supplementHistory TEXT DEFAULT \'\'');
     } catch { /* column already exists */ }
   }
 
@@ -201,127 +218,37 @@ class EMRDatabase {
     const id = record.id || crypto.randomUUID();
     const existing = this.getRecordById(id);
 
+    // Auto-generate SQL from RECORD_DATA_COLUMNS
+    const dataValues = RECORD_DATA_COLUMNS.map(c => record[c] || '');
+
     if (existing) {
-      this._db.prepare(`
-        UPDATE records SET disease = ?, type = ?, 
-        chief = ?, hpi = ?, past = ?, exam = ?, lab = ?, diag = ?, diff = ?, plan = ?, workup = ?,
-        summary = ?, diagnosis = ?, analysis = ?, treatment = ?, signed = ?,
-        chiefSummary = ?, chiefDiagnosis = ?, chiefAnalysis = ?, chiefTreatment = ?, chiefSigned = ?,
-        preopDiagnosis = ?, preopIndication = ?, preopPlan = ?, preopPreparation = ?, preopRisk = ?, preopSigned = ?,
-        discussionParticipants = ?, discussionCaseSummary = ?, discussionDiagnosis = ?, discussionContent = ?, discussionConclusion = ?, discussionSigned = ?,
-        surgeryName = ?, surgerySurgeon = ?, surgeryAssistant = ?, surgeryAnesthesia = ?, surgeryProcess = ?, surgeryFindings = ?, surgerySigned = ?,
-        dischargeAdmissionDate = ?, dischargeDate = ?, dischargeDiagnosis = ?, dischargeTreatment = ?, dischargeOutcome = ?, dischargeAdvice = ?, dischargeSigned = ?,
-        updatedAt = ?
-        WHERE id = ?
-      `).run(
+      const setClauses = [
+        'disease = ?', 'type = ?',
+        ...RECORD_DATA_COLUMNS.map(c => `${c} = ?`),
+        'updatedAt = ?'
+      ];
+      const params = [
         record.disease,
         record.type || 'firstCourse',
-        record.chief || '',
-        record.hpi || '',
-        record.past || '',
-        record.exam || '',
-        record.lab || '',
-        record.diag || '',
-        record.diff || '',
-        record.plan || '',
-        record.workup || '',
-        record.summary || '',
-        record.diagnosis || '',
-        record.analysis || '',
-        record.treatment || '',
-        record.signed || '',
-        record.chiefSummary || '',
-        record.chiefDiagnosis || '',
-        record.chiefAnalysis || '',
-        record.chiefTreatment || '',
-        record.chiefSigned || '',
-        record.preopDiagnosis || '',
-        record.preopIndication || '',
-        record.preopPlan || '',
-        record.preopPreparation || '',
-        record.preopRisk || '',
-        record.preopSigned || '',
-        record.discussionParticipants || '',
-        record.discussionCaseSummary || '',
-        record.discussionDiagnosis || '',
-        record.discussionContent || '',
-        record.discussionConclusion || '',
-        record.discussionSigned || '',
-        record.surgeryName || '',
-        record.surgerySurgeon || '',
-        record.surgeryAssistant || '',
-        record.surgeryAnesthesia || '',
-        record.surgeryProcess || '',
-        record.surgeryFindings || '',
-        record.surgerySigned || '',
-        record.dischargeAdmissionDate || '',
-        record.dischargeDate || '',
-        record.dischargeDiagnosis || '',
-        record.dischargeTreatment || '',
-        record.dischargeOutcome || '',
-        record.dischargeAdvice || '',
-        record.dischargeSigned || '',
+        ...dataValues,
         now,
         id
-      );
+      ];
+      this._db.prepare(`UPDATE records SET ${setClauses.join(', ')} WHERE id = ?`).run(...params);
     } else {
-      this._db.prepare(`
-        INSERT INTO records (id, patientId, disease, type, content, chief, hpi, past, exam, lab, diag, diff, plan, workup, summary, diagnosis, analysis, treatment, signed, chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned, preopDiagnosis, preopIndication, preopPlan, preopPreparation, preopRisk, preopSigned, discussionParticipants, discussionCaseSummary, discussionDiagnosis, discussionContent, discussionConclusion, discussionSigned, surgeryName, surgerySurgeon, surgeryAssistant, surgeryAnesthesia, surgeryProcess, surgeryFindings, surgerySigned, dischargeAdmissionDate, dischargeDate, dischargeDiagnosis, dischargeTreatment, dischargeOutcome, dischargeAdvice, dischargeSigned, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
+      const insertCols = ['id', 'patientId', 'disease', 'type', 'content', ...RECORD_DATA_COLUMNS, 'createdAt', 'updatedAt'];
+      const placeholders = insertCols.map(() => '?').join(', ');
+      const params = [
         id,
         record.patientId,
         record.disease,
         record.type || 'firstCourse',
         JSON.stringify(this._buildRecordContent(record)),
-        record.chief || '',
-        record.hpi || '',
-        record.past || '',
-        record.exam || '',
-        record.lab || '',
-        record.diag || '',
-        record.diff || '',
-        record.plan || '',
-        record.workup || '',
-        record.summary || '',
-        record.diagnosis || '',
-        record.analysis || '',
-        record.treatment || '',
-        record.signed || '',
-        record.chiefSummary || '',
-        record.chiefDiagnosis || '',
-        record.chiefAnalysis || '',
-        record.chiefTreatment || '',
-        record.chiefSigned || '',
-        record.preopDiagnosis || '',
-        record.preopIndication || '',
-        record.preopPlan || '',
-        record.preopPreparation || '',
-        record.preopRisk || '',
-        record.preopSigned || '',
-        record.discussionParticipants || '',
-        record.discussionCaseSummary || '',
-        record.discussionDiagnosis || '',
-        record.discussionContent || '',
-        record.discussionConclusion || '',
-        record.discussionSigned || '',
-        record.surgeryName || '',
-        record.surgerySurgeon || '',
-        record.surgeryAssistant || '',
-        record.surgeryAnesthesia || '',
-        record.surgeryProcess || '',
-        record.surgeryFindings || '',
-        record.surgerySigned || '',
-        record.dischargeAdmissionDate || '',
-        record.dischargeDate || '',
-        record.dischargeDiagnosis || '',
-        record.dischargeTreatment || '',
-        record.dischargeOutcome || '',
-        record.dischargeAdvice || '',
-        record.dischargeSigned || '',
+        ...dataValues,
         now,
         now
-      );
+      ];
+      this._db.prepare(`INSERT INTO records (${insertCols.join(', ')}) VALUES (${placeholders})`).run(...params);
     }
 
     return id;
@@ -346,6 +273,7 @@ class EMRDatabase {
       case 'attendingRound':
         return {
           summary: record.summary || '',
+          supplementHistory: record.supplementHistory || '',
           diagnosis: record.diagnosis || '',
           analysis: record.analysis || '',
           treatment: record.treatment || '',
