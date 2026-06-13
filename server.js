@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const apiRouter = require('./src/routes/api');
 const crudRouter = require('./src/routes/crud');
+const promptsRouter = require('./src/routes/prompts');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -24,6 +25,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ── API routes ──
 app.use('/api', apiRouter);
 app.use('/api', crudRouter);
+app.use('/api', promptsRouter);
+
+// ── Prompt editor page ──
+app.get('/prompts', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'prompts.html'));
+});
 
 // ── SPA fallback: all unknown routes → index.html ──
 app.get('*', (req, res) => {

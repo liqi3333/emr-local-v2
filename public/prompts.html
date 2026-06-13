@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 提示词模板编辑器 - 电子病历系统 v2</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="prompt-editor-page">
+
+  <div id="promptEditorRoot"></div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script type="module">
+    import { PromptEditor } from '/js/components/PromptEditor.js';
+
+    const root = document.getElementById('promptEditorRoot');
+    const editor = new PromptEditor(root);
+    await editor.render();
+  </script>
+</body>
+</html>

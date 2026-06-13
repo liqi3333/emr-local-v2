@@ -111,6 +111,12 @@ class EMRDatabase {
       CREATE INDEX IF NOT EXISTS idx_records_disease ON records(disease);
       CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(createdAt);
       CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(createdAt);
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
     `);
     // Add workup column for existing databases
     try {
@@ -352,6 +358,22 @@ class EMRDatabase {
       recordCount: recordCount.count,
       diseaseStats,
     };
+  }
+
+  // ─── Settings ───
+
+  getSetting(key) {
+    const row = this._db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    return row ? row.value : null;
+  }
+
+  setSetting(key, value) {
+    const now = new Date().toISOString();
+    this._db.prepare(`
+      INSERT INTO settings (key, value, updatedAt)
+      VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
+    `).run(key, value, now);
   }
 
   close() {

@@ -470,12 +470,135 @@ export async function getSurgeryTemplate(disease) {
 }
 
 /**
- * Get discharge template for a disease.
+ * Get discharge summary template for a disease.
  * @param {string} disease
  * @returns {Promise<{template: object|null}>}
  */
 export async function getDischargeTemplate(disease) {
   const res = await fetchWithTimeout(`${BASE}/templates/discharge/${encodeURIComponent(disease)}`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ──────────────────────────────────────────────
+//  Prompt Template Management
+// ──────────────────────────────────────────────
+
+export async function listPromptTemplates() {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getPromptTemplate(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function createPromptTemplate(name, basedOn = 'default') {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, basedOn }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function savePromptTemplate(name, data) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function duplicatePromptTemplate(name, targetName) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}/duplicate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetName }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deletePromptTemplate(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getActivePromptTemplate() {
+  const res = await fetchWithTimeout(`${BASE}/prompts/active`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function setActivePromptTemplate(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/active`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getMergedPromptTemplate() {
+  const res = await fetchWithTimeout(`${BASE}/prompts/merged`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function syncPromptTemplate(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}/sync`, {
+    method: 'POST',
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getPromptTemplateStatus(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}/status`, {}, TIMEOUT);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `HTTP ${res.status}`);

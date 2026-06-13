@@ -135,6 +135,14 @@ function setupPatientButton() {
   });
 }
 
+// ─── Prompts Button ───
+function setupPromptsButton() {
+  const btn = document.getElementById('btnPrompts');
+  btn?.addEventListener('click', () => {
+    window.open('/prompts', '_blank');
+  });
+}
+
 // ─── Pane Divider (draggable resize) ───
 function setupPaneDivider() {
   const divider = document.getElementById('paneDivider');
@@ -181,6 +189,7 @@ async function init() {
     setupSidebarToggle();
     setupExport();
     setupPatientButton();
+    setupPromptsButton();
     setupPaneDivider();
 
     // Update model badge
