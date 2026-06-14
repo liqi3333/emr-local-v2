@@ -10,8 +10,7 @@
  */
 
 import * as api from '../services/api.js';
-
-const TAB_ORDER = ['emr', 'attending', 'chief', 'preop', 'discussion', 'surgery', 'discharge'];
+import { recordTypeApi } from '../services/recordTypeApi.js';
 
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -30,6 +29,8 @@ export class PromptEditor {
       editingField: null,
       loading: false,
       updateBanner: null,
+      registry: null,
+      tabOrder: [],
     };
   }
 
@@ -47,20 +48,30 @@ export class PromptEditor {
   async _loadData() {
     this._setLoading(true);
     try {
-      const [templatesRes, defaultRes, activeRes] = await Promise.all([
+      const [templatesRes, defaultRes, activeRes, registryRes] = await Promise.all([
         api.listPromptTemplates(),
         api.getPromptTemplate('default'),
         api.getActivePromptTemplate(),
+        recordTypeApi.getRegistry().catch(() => null),
       ]);
 
       this._state.templates = templatesRes.templates || [];
       this._state.defaultTemplate = defaultRes.template;
       this._state.activeName = activeRes.name || 'default';
+      this._state.registry = registryRes;
+
+      // Build tab order from registry (grouped by category)
+      this._buildTabOrder();
 
       // If current template no longer exists, fall back to default
       const exists = this._state.templates.some((t) => t.name === this._state.currentName);
       if (!exists) {
         this._state.currentName = 'default';
+      }
+
+      // Ensure currentTab is valid
+      if (!this._state.tabOrder.some(t => t.key === this._state.currentTab)) {
+        this._state.currentTab = this._state.tabOrder[0]?.key || 'emr';
       }
 
       await this._loadCurrentTemplate();
@@ -70,6 +81,37 @@ export class PromptEditor {
     } finally {
       this._setLoading(false);
     }
+  }
+
+  _buildTabOrder() {
+    const registry = this._state.registry;
+    if (!registry || !Array.isArray(registry.categories)) {
+      // Fallback to default template keys
+      this._state.tabOrder = Object.keys(this._state.defaultTemplate?.templates || {}).map(key => ({
+        key,
+        label: this._state.defaultTemplate?.templates?.[key]?.label || key,
+        category: null,
+      }));
+      return;
+    }
+
+    const tabs = [];
+    for (const cat of registry.categories) {
+      if (cat.enabled === false) continue;
+      for (const type of cat.types) {
+        if (type.enabled === false) continue;
+        // Only show types that have a template in defaultTemplate
+        if (this._state.defaultTemplate?.templates?.[type.templateKey]) {
+          tabs.push({
+            key: type.templateKey,
+            label: type.label,
+            category: cat.label,
+            typeId: type.id,
+          });
+        }
+      }
+    }
+    this._state.tabOrder = tabs;
   }
 
   async _loadCurrentTemplate() {
@@ -181,12 +223,20 @@ export class PromptEditor {
 
   _renderTabs() {
     const tabs = this.container.querySelector('#peTabs');
-    tabs.innerHTML = TAB_ORDER.map((key) => {
-      const typeConfig = this._state.defaultTemplate?.templates?.[key];
-      const label = typeConfig?.label || key;
-      const active = key === this._state.currentTab ? 'active' : '';
-      return `<button class="pe-tab ${active}" data-tab="${key}">📋 ${this._escapeHtml(label)}</button>`;
-    }).join('');
+    const tabOrder = this._state.tabOrder;
+    let lastCategory = null;
+    let html = '';
+
+    for (const tab of tabOrder) {
+      if (tab.category && tab.category !== lastCategory) {
+        html += `<div class="pe-tab-category">${this._escapeHtml(tab.category)}</div>`;
+        lastCategory = tab.category;
+      }
+      const active = tab.key === this._state.currentTab ? 'active' : '';
+      html += `<button class="pe-tab ${active}" data-tab="${tab.key}">📋 ${this._escapeHtml(tab.label)}</button>`;
+    }
+
+    tabs.innerHTML = html;
   }
 
   _renderTabContent() {
@@ -247,6 +297,9 @@ export class PromptEditor {
 
       <section class="pe-section pe-preview">
         <label class="pe-label">最终 system prompt 预览</label>
+        <div class="pe-preview-actions">
+          <button id="peBtnRefreshPreview" class="pe-btn pe-btn-sm">🔄 从后端刷新精确预览</button>
+        </div>
         <pre id="pePreview"></pre>
       </section>
     `;
@@ -256,19 +309,40 @@ export class PromptEditor {
     this._renderPreview(typeKey);
   }
 
+  _getRegistryTypeForTab(typeKey) {
+    const tab = this._state.tabOrder.find(t => t.key === typeKey);
+    if (!tab || !tab.typeId || !this._state.registry) return null;
+    for (const cat of this._state.registry.categories) {
+      const found = cat.types.find(t => t.id === tab.typeId);
+      if (found) return found;
+    }
+    return null;
+  }
+
   _renderFieldsTable(currentType, defaultType) {
     const tbody = this.container.querySelector('#peFieldsBody');
     if (!tbody) return;
+
+    const typeKey = this._state.currentTab;
+    const regType = this._getRegistryTypeForTab(typeKey);
+    const regFieldsMap = {};
+    if (regType && Array.isArray(regType.fields)) {
+      for (const f of regType.fields) {
+        regFieldsMap[f.key] = f;
+      }
+    }
 
     const defaultFields = defaultType.fields || {};
     const currentFields = currentType.fields || {};
 
     tbody.innerHTML = Object.entries(defaultFields).map(([key, defaultField]) => {
       const customField = currentFields[key];
+      const regField = regFieldsMap[key];
       const isCustom = !!customField;
-      const label = customField?.label || defaultField.label;
-      const description = customField?.description || defaultField.description;
-      const source = isCustom ? '自定义' : '默认';
+      const label = customField?.label || defaultField.label || regField?.label || key;
+      // Prefer registry description (source of truth), fallback to template
+      const description = customField?.description || regField?.description || defaultField.description || '';
+      const source = isCustom ? '自定义' : (regField ? 'Registry' : '默认');
 
       return `
         <tr data-field="${key}">
@@ -304,6 +378,9 @@ export class PromptEditor {
     const typeConfig = this._state.currentTemplate?.templates?.[typeKey];
     const defaultType = this._state.defaultTemplate?.templates?.[typeKey];
     const defaultField = defaultType?.fields?.[fieldKey];
+    const regType = this._getRegistryTypeForTab(typeKey);
+    const regField = regType?.fields?.find(f => f.key === fieldKey);
+    const registryDesc = regField?.description || '';
 
     form.innerHTML = `
       <div class="pe-field-edit-card">
@@ -317,7 +394,7 @@ export class PromptEditor {
           <button id="peBtnResetField" class="pe-btn">恢复默认</button>
           <button id="peBtnCancelField" class="pe-btn">取消</button>
         </div>
-        ${defaultField ? `<div class="pe-field-default">默认值：${this._escapeHtml(defaultField.description)}</div>` : ''}
+        ${registryDesc ? `<div class="pe-field-default">Registry 默认值：${this._escapeHtml(registryDesc)}</div>` : ''}
       </div>
     `;
 
@@ -343,7 +420,7 @@ export class PromptEditor {
       fields: this._getCurrentFieldsFromTable(typeKey),
     };
 
-    // Assemble preview manually (without context placeholders)
+    // Assemble preview locally (fast, uses Registry field descriptions)
     const fieldObj = {};
     for (const [key, field] of Object.entries(typeConfig.fields)) {
       fieldObj[key] = field.description;
@@ -365,14 +442,45 @@ export class PromptEditor {
     previewEl.textContent = preview;
   }
 
+  async _refreshPreviewFromBackend() {
+    const previewEl = this.container.querySelector('#pePreview');
+    if (!previewEl) return;
+
+    const typeKey = this._state.currentTab;
+    const tab = this._state.tabOrder.find(t => t.key === typeKey);
+    if (!tab) return;
+
+    previewEl.textContent = '正在从后端获取精确预览...';
+    try {
+      const { systemPrompt, userPrompt } = await api.getPromptPreview(typeKey, {
+        disease: '示例疾病',
+      });
+      const full = systemPrompt + '\n\n--- 用户提示词 ---\n' + userPrompt;
+      previewEl.textContent = full;
+    } catch (err) {
+      previewEl.textContent = '预览获取失败: ' + err.message;
+    }
+  }
+
   _getCurrentFieldsFromTable(typeKey) {
     const currentType = this._state.currentTemplate?.templates?.[typeKey] || {};
     const defaultType = this._state.defaultTemplate?.templates?.[typeKey] || {};
+    const regType = this._getRegistryTypeForTab(typeKey);
+    const regFieldsMap = {};
+    if (regType && Array.isArray(regType.fields)) {
+      for (const f of regType.fields) regFieldsMap[f.key] = f;
+    }
+
     const result = {};
 
+    // Start with default template fields (defines order)
     for (const [key, defaultField] of Object.entries(defaultType.fields || {})) {
       const customField = currentType.fields?.[key];
-      result[key] = customField ? { ...customField } : { ...defaultField };
+      const regField = regFieldsMap[key];
+      result[key] = {
+        label: customField?.label || defaultField?.label || regField?.label || key,
+        description: customField?.description || regField?.description || defaultField?.description || '',
+      };
     }
 
     return result;
@@ -422,6 +530,8 @@ export class PromptEditor {
         this._saveCurrentTab();
       } else if (e.target.closest('#peBtnResetTab')) {
         this._resetCurrentTab();
+      } else if (e.target.closest('#peBtnRefreshPreview')) {
+        this._refreshPreviewFromBackend();
       }
     });
   }
@@ -512,11 +622,15 @@ export class PromptEditor {
     const customField = currentType.fields?.[fieldKey];
     const defaultField = defaultType.fields?.[fieldKey];
 
+    // Get registry description as ultimate fallback
+    const regType = this._getRegistryTypeForTab(typeKey);
+    const regField = regType?.fields?.find(f => f.key === fieldKey);
+
     this._state.editingField = {
       typeKey,
       fieldKey,
-      label: customField?.label || defaultField?.label || '',
-      description: customField?.description || defaultField?.description || '',
+      label: customField?.label || defaultField?.label || regField?.label || '',
+      description: customField?.description || defaultField?.description || regField?.description || '',
     };
 
     this._renderFieldEditForm();
@@ -545,10 +659,11 @@ export class PromptEditor {
     if (!this._state.editingField) return;
     const { typeKey, fieldKey } = this._state.editingField;
     const defaultField = this._state.defaultTemplate?.templates?.[typeKey]?.fields?.[fieldKey];
-    if (defaultField) {
-      this._state.editingField.label = defaultField.label;
-      this._state.editingField.description = defaultField.description;
-    }
+    const regType = this._getRegistryTypeForTab(typeKey);
+    const regField = regType?.fields?.find(f => f.key === fieldKey);
+
+    this._state.editingField.label = defaultField?.label || regField?.label || '';
+    this._state.editingField.description = defaultField?.description || regField?.description || '';
     this._renderFieldEditForm();
   }
 

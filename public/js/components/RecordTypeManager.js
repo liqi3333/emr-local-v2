@@ -4,6 +4,7 @@
  */
 
 import { recordTypeApi } from '../services/recordTypeApi.js';
+import * as api from '../services/api.js';
 
 export class RecordTypeManager {
   constructor(containerEl) {
@@ -180,7 +181,7 @@ export class RecordTypeManager {
           <div class="rtm-item rtm-item-editing" data-id="${type.id}">
             <input class="rtm-input" id="editTypeLabel" value="${this._esc(type.label)}" placeholder="类型名称">
             <input class="rtm-input rtm-input-sm" id="editTypeStoreKey" value="${this._esc(type.storeKey)}" placeholder="storeKey">
-            <input class="rtm-input rtm-input-sm" id="editTypeTemplateKey" value="${this._esc(type.templateKey)}" placeholder="templateKey">
+            <input class="rtm-input rtm-input-sm" id="editTypeTemplateKey" value="${this._esc(type.templateKey)}" placeholder="templateKey" readonly title="templateKey 创建后不可修改">
             <div class="rtm-item-actions">
               <button class="btn btn-sm btn-primary" data-action="saveType" data-id="${type.id}">保存</button>
               <button class="btn btn-sm btn-ghost" data-action="cancelEdit">取消</button>
@@ -208,6 +209,7 @@ export class RecordTypeManager {
       html += `
         <div class="rtm-item rtm-item-editing">
           <input class="rtm-input" id="newTypeLabel" value="" placeholder="类型名称" autofocus>
+          <input class="rtm-input rtm-input-sm" id="newTypeTemplateKey" value="" placeholder="templateKey（可选，默认自动生成）">
           <div class="rtm-item-actions">
             <button class="btn btn-sm btn-primary" data-action="confirmAddType">添加</button>
             <button class="btn btn-sm btn-ghost" data-action="cancelAdd">取消</button>
@@ -404,7 +406,7 @@ export class RecordTypeManager {
         if (type) {
           type.label = document.getElementById('editTypeLabel').value.trim() || type.label;
           type.storeKey = document.getElementById('editTypeStoreKey').value.trim() || type.storeKey;
-          type.templateKey = document.getElementById('editTypeTemplateKey').value.trim() || type.templateKey;
+          // templateKey is read-only for existing types — do not update
           await this._save();
         }
         this._state.editingType = null;
@@ -426,11 +428,22 @@ export class RecordTypeManager {
       case 'deleteType': {
         if (!confirm('确定删除此类型？')) break;
         const cat = this._state.selectedCategory;
+        const deletedType = cat.types.find(t => t.id === id);
         cat.types = cat.types.filter(t => t.id !== id);
         if (this._state.selectedType?.id === id) {
           this._state.selectedType = cat.types[0] || null;
         }
         await this._save();
+
+        // Clean up prompt templates for the deleted type
+        if (deletedType?.templateKey) {
+          try {
+            await api.cleanupPromptTemplate(deletedType.templateKey);
+          } catch (e) {
+            console.warn('[RecordTypeManager] Failed to cleanup prompt template:', e.message);
+          }
+        }
+
         this._renderAll();
         break;
       }
@@ -579,9 +592,13 @@ export class RecordTypeManager {
         const cat = this._state.selectedCategory;
         const seq = cat.types.length + 1;
         const storeKey = cat.id + '_custom_' + seq;
-        const templateKey = 'generic_' + storeKey;
+        const customTemplateKey = document.getElementById('newTypeTemplateKey')?.value.trim();
+        const templateKey = customTemplateKey || 'generic_' + storeKey;
         if (cat.types.find(t => t.id === storeKey)) {
           this._toast('error', '类型ID已存在'); break;
+        }
+        if (cat.types.find(t => t.templateKey === templateKey)) {
+          this._toast('error', 'templateKey 已存在'); break;
         }
         cat.types.push({
           id: storeKey, label, icon: '📄', storeKey, templateKey,
@@ -590,6 +607,14 @@ export class RecordTypeManager {
         });
         this._state.newType = null;
         await this._save();
+
+        // Auto-generate skeleton in active prompt template
+        try {
+          await api.createPromptTemplateSkeleton(templateKey, label);
+        } catch (e) {
+          console.warn('[RecordTypeManager] Failed to create template skeleton:', e.message);
+        }
+
         this._renderAll();
         break;
       }

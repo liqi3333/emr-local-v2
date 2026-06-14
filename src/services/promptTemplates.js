@@ -25,6 +25,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('./database');
+const recordRegistry = require('./recordRegistry');
 
 const DEFAULT_TEMPLATE_PATH = path.join(__dirname, '../data/defaultPrompts.json');
 const TEMPLATES_DIR = path.join(__dirname, '../../data/prompt-templates');
@@ -335,19 +336,41 @@ function buildContextString(label, data) {
   return `\n${label}：\n${JSON.stringify(data, null, 2)}`;
 }
 
+const CONTEXT_LABELS = {
+  emrData: '首次病程录内容',
+  attendingData: '主治医师查房记录',
+  chiefData: '主任医师查房记录',
+  preopData: '术前小结内容',
+  discussionData: '术前讨论记录',
+  surgeryData: '手术记录内容',
+  dischargeData: '出院小结内容',
+  surgeryConsentData: '手术同意书内容',
+  bloodTransfusionConsentData: '输血同意书内容',
+  anesthesiaConsentData: '麻醉同意书内容',
+  nursingAssessmentData: '护理评估内容',
+  nursingPlanData: '护理计划内容',
+  nursingRecordSheetData: '护理记录单内容',
+};
+
 function replacePlaceholders(text, context) {
   if (!text) return '';
   const disease = context.disease || '';
   const patientInfo = context.patientInfo || {};
 
+  // Static placeholders
   const replacements = {
     '{{disease}}': disease,
     '{{patientContext}}': buildContextString('患者基本信息', patientInfo),
-    '{{emrContext}}': buildContextString('首次病程录内容', context.emrData),
-    '{{attendingContext}}': buildContextString('主治医师查房记录', context.attendingData),
-    '{{preopContext}}': buildContextString('术前小结内容', context.preopData),
-    '{{surgeryContext}}': buildContextString('手术记录内容', context.surgeryData),
   };
+
+  // Dynamic: generate {{storeKey DataContext}} for all context data in request
+  for (const [key, value] of Object.entries(context)) {
+    if (key === 'disease' || key === 'patientInfo') continue;
+    if (value && typeof value === 'object' && Object.keys(value).length > 0) {
+      const label = CONTEXT_LABELS[key] || key;
+      replacements[`{{${key}Context}}`] = buildContextString(label, value);
+    }
+  }
 
   let result = text;
   for (const [placeholder, value] of Object.entries(replacements)) {
@@ -356,13 +379,27 @@ function replacePlaceholders(text, context) {
   return result;
 }
 
-function assembleFieldBlock(typeConfig) {
-  const fields = typeConfig.fields || {};
+function assembleFieldBlock(typeConfig, registryTypeConfig) {
   const fieldObj = {};
-  for (const [key, field] of Object.entries(fields)) {
-    // description already includes the label prefix as it appears in the prompt
-    fieldObj[key] = field.description;
+
+  // Build a lookup from registry fields by key (if registry config provided)
+  const registryFieldsMap = {};
+  if (registryTypeConfig && Array.isArray(registryTypeConfig.fields)) {
+    for (const f of registryTypeConfig.fields) {
+      registryFieldsMap[f.key] = f;
+    }
   }
+
+  const templateFields = typeConfig.fields || {};
+  for (const key of Object.keys(templateFields)) {
+    const registryField = registryFieldsMap[key];
+    if (registryField && registryField.enabled === false) continue;
+
+    // Prefer registry description, fallback to template description
+    const description = (registryField && registryField.description) || templateFields[key].description || '';
+    fieldObj[key] = description;
+  }
+
   return JSON.stringify(fieldObj, null, 2);
 }
 
@@ -401,12 +438,15 @@ function assembleSystemPrompt(type, context, registryTypeConfig) {
   const merged = getMergedTemplate(activeName);
   const typeConfig = merged.templates[type];
 
+  // Resolve registry config: use passed-in or look up by templateKey
+  const regConfig = registryTypeConfig || recordRegistry.findTypeByTemplateKey(type)?.type || null;
+
   // Layer 1: Use existing template from defaultPrompts.json
   if (typeConfig) {
     const rolePrompt = replacePlaceholders(typeConfig.rolePrompt, context);
     const outputFormat = replacePlaceholders(typeConfig.outputFormat, context);
     const endingPrompt = replacePlaceholders(typeConfig.endingPrompt, context);
-    const fieldBlock = assembleFieldBlock(typeConfig);
+    const fieldBlock = assembleFieldBlock(typeConfig, regConfig);
 
     const parts = [
       rolePrompt,
@@ -422,8 +462,8 @@ function assembleSystemPrompt(type, context, registryTypeConfig) {
   }
 
   // Layer 2: Auto-generate from registry fields
-  if (registryTypeConfig) {
-    return buildFromRegistryFields(registryTypeConfig, context);
+  if (regConfig) {
+    return buildFromRegistryFields(regConfig, context);
   }
 
   // Layer 3: No template found

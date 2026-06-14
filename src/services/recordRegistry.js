@@ -48,6 +48,15 @@ function findType(typeId) {
   return null;
 }
 
+function findTypeByTemplateKey(templateKey) {
+  const registry = getRegistry() || getDefaultRegistry();
+  for (const cat of registry.categories) {
+    const found = cat.types.find(t => t.templateKey === templateKey);
+    if (found) return { category: cat, type: found };
+  }
+  return null;
+}
+
 function validateRegistry(registry) {
   if (!registry || !Array.isArray(registry.categories)) {
     return { valid: false, error: 'registry.categories must be an array' };
@@ -108,6 +117,7 @@ module.exports = {
   ensureDefaultRegistry,
   findCategory,
   findType,
+  findTypeByTemplateKey,
   validateRegistry,
   migrateLegacyTypes,
 };

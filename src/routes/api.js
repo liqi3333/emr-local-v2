@@ -136,7 +136,7 @@ router.post('/records/:typeId/generate', async (req, res) => {
     } else {
       // Generate prompt and call real AI
       const systemPrompt = promptTemplates.assembleSystemPrompt(typeConfig.templateKey, context, typeConfig);
-      const userPrompt = promptTemplates.assembleUserPrompt(typeConfig.templateKey, { disease }, typeConfig);
+      const userPrompt = promptTemplates.assembleUserPrompt(typeConfig.templateKey, context, typeConfig);
 
       const messages = [
         { role: 'system', content: systemPrompt },
@@ -228,7 +228,7 @@ for (const [oldPath, typeId] of Object.entries(_DEPRECATED_MAP)) {
         content = mockGenerate(result.type, disease, context);
       } else {
         const systemPrompt = promptTemplates.assembleSystemPrompt(result.type.templateKey, context, result.type);
-        const userPrompt = promptTemplates.assembleUserPrompt(result.type.templateKey, { disease }, result.type);
+        const userPrompt = promptTemplates.assembleUserPrompt(result.type.templateKey, context, result.type);
         content = await ai.callAI(provider, model, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }], apiKey, baseUrl);
       }
       let emr;
@@ -277,7 +277,7 @@ router.post('/emr/generate/stream', async (req, res) => {
     disease,
     patientInfo,
   });
-  const userPrompt = promptTemplates.assembleUserPrompt('emr', { disease });
+  const userPrompt = promptTemplates.assembleUserPrompt('emr', { disease, patientInfo });
 
   const messages = [
     { role: 'system', content: systemPrompt },

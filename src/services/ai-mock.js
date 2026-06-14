@@ -39,7 +39,7 @@ function extractDisease(text) {
  * Generate mock attending round response.
  * Inherits content from emrData if available.
  */
-function mockAttendingRound(text) {
+function mockAttendingRound(text, context) {
   const disease = extractDisease(text);
 
   let emrData = {};
@@ -72,7 +72,7 @@ function mockAttendingRound(text) {
  * Generate mock first course EMR response.
  * Tries professional templates first, falls back to generic mock.
  */
-function mockFirstCourse(text) {
+function mockFirstCourse(text, context) {
   const disease = extractDisease(text);
 
   const template = getTemplate(disease);
@@ -95,7 +95,7 @@ function mockFirstCourse(text) {
 /**
  * Generate mock chief round response.
  */
-function mockChiefRound(text) {
+function mockChiefRound(text, context) {
   const disease = extractDisease(text);
 
   const template = getChiefTemplate(disease);
@@ -115,7 +115,7 @@ function mockChiefRound(text) {
 /**
  * Generate mock preop summary response.
  */
-function mockPreop(text) {
+function mockPreop(text, context) {
   const disease = extractDisease(text);
 
   const template = getPreopTemplate(disease);
@@ -136,7 +136,7 @@ function mockPreop(text) {
 /**
  * Generate mock discussion response.
  */
-function mockDiscussion(text) {
+function mockDiscussion(text, context) {
   const disease = extractDisease(text);
 
   const template = getDiscussionTemplate(disease);
@@ -157,7 +157,7 @@ function mockDiscussion(text) {
 /**
  * Generate mock surgery record response.
  */
-function mockSurgery(text) {
+function mockSurgery(text, context) {
   const disease = extractDisease(text);
 
   const template = getSurgeryTemplate(disease);
@@ -179,7 +179,7 @@ function mockSurgery(text) {
 /**
  * Generate mock discharge summary response.
  */
-function mockDischarge(text) {
+function mockDischarge(text, context) {
   const disease = extractDisease(text);
 
   const template = getDischargeTemplate(disease);
@@ -201,7 +201,7 @@ function mockDischarge(text) {
 /**
  * Generate mock surgery consent response.
  */
-function mockSurgeryConsent(text) {
+function mockSurgeryConsent(text, context) {
   const disease = extractDisease(text);
   const template = getConsentTemplate('surgeryConsent', disease);
   if (template) return JSON.stringify(template);
@@ -219,7 +219,7 @@ function mockSurgeryConsent(text) {
 /**
  * Generate mock blood transfusion consent response.
  */
-function mockBloodTransfusionConsent(text) {
+function mockBloodTransfusionConsent(text, context) {
   const disease = extractDisease(text);
   const template = getConsentTemplate('bloodTransfusionConsent', disease);
   if (template) return JSON.stringify(template);
@@ -238,7 +238,7 @@ function mockBloodTransfusionConsent(text) {
 /**
  * Generate mock anesthesia consent response.
  */
-function mockAnesthesiaConsent(text) {
+function mockAnesthesiaConsent(text, context) {
   const disease = extractDisease(text);
   const template = getConsentTemplate('anesthesiaConsent', disease);
   if (template) return JSON.stringify(template);
@@ -257,7 +257,7 @@ function mockAnesthesiaConsent(text) {
 /**
  * Generate mock nursing assessment response.
  */
-function mockNursingAssessment(text) {
+function mockNursingAssessment(text, context) {
   const disease = extractDisease(text);
   const template = getNursingTemplate('nursingAssessment', disease);
   if (template) return JSON.stringify(template);
@@ -277,7 +277,7 @@ function mockNursingAssessment(text) {
 /**
  * Generate mock nursing plan response.
  */
-function mockNursingPlan(text) {
+function mockNursingPlan(text, context) {
   const disease = extractDisease(text);
   const template = getNursingTemplate('nursingPlan', disease);
   if (template) return JSON.stringify(template);
@@ -295,7 +295,7 @@ function mockNursingPlan(text) {
 /**
  * Generate mock nursing record sheet response.
  */
-function mockNursingRecordSheet(text) {
+function mockNursingRecordSheet(text, context) {
   const disease = extractDisease(text);
   const template = getNursingTemplate('nursingRecordSheet', disease);
   if (template) return JSON.stringify(template);
@@ -333,7 +333,7 @@ MOCK_STRATEGIES.set('nursingRecordSheet', mockNursingRecordSheet);
  * @param {string} disease - Disease name
  * @returns {string} JSON string
  */
-function buildGenericMock(fields, disease) {
+function buildGenericMock(fields, disease, context) {
   const result = {};
   for (const field of fields || []) {
     if (field.enabled === false) continue;
@@ -357,11 +357,11 @@ function mockGenerate(typeConfig, disease, context) {
   if (strategy) {
     // Build a synthetic prompt for the strategy to parse
     const syntheticText = `请为"${disease}"生成${typeConfig.label}。`;
-    return strategy(syntheticText);
+    return strategy(syntheticText, context);
   }
 
-  // Layer 2: Generic mock for new types
-  return buildGenericMock(typeConfig.fields, disease);
+  // Layer 2: Generic mock for new types (use context if available)
+  return buildGenericMock(typeConfig.fields, disease, context);
 }
 
 /**

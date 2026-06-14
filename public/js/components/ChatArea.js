@@ -124,25 +124,39 @@ export class ChatArea {
 
     // Build system context: disease + current EMR data based on active type
     if (store.state.currentDisease) {
-      let systemContent = `当前患者疾病：${store.state.currentDisease}。`;
-
       const activeType = store.state.activeType || 'firstCourse';
       const typeConfig = store.getTypeConfig(activeType);
+      const templateKey = typeConfig?.templateKey || 'emr';
       const tabLabel = typeConfig?.label || activeType;
       const currentData = store.getActiveTypeData();
 
-      // Build field description from registry
-      let fieldDesc = '';
-      if (typeConfig?.fields) {
-        fieldDesc = '字段说明：\n' + typeConfig.fields.filter(f => f.enabled !== false).map(f => `- ${f.key}: ${f.label}`).join('\n');
-      }
-
+      // Build context for prompt assembly
+      const context = { disease: store.state.currentDisease };
       if (currentData) {
-        systemContent += `\n当前病历内容（${tabLabel}）：\n${JSON.stringify(currentData, null, 2)}`;
+        const storeKey = typeConfig?.storeKey || 'emrData';
+        context[storeKey] = currentData;
       }
 
-      systemContent += `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改【${tabLabel}】的病历。\n\n${fieldDesc}\n\n如果用户要求修改病历，请严格按以下步骤执行：\n\n**步骤1：修改用户指定的字段**\n\n**步骤2：保持格式**\n确保每个字段保持专业医学文书格式。\n\n**原则：最小改动**\n只修改与用户要求直接相关的字段。\n\n在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：\n\`\`\`json\n{"fieldName": "修改后完整内容"}\n\`\`\`\n字段名必须与上方字段说明中的英文名一致。如果没有字段被修改，则不要输出 JSON 代码块。`;
-      apiMessages.unshift({ role: 'system', content: systemContent });
+      try {
+        const { systemPrompt: templatePrompt } = await api.getPromptPreview(templateKey, context);
+
+        // Append chat-specific constraints to the template prompt
+        const systemContent = templatePrompt + `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改【${tabLabel}】的病历。\n\n如果用户要求修改病历，请严格按以下步骤执行：\n\n**步骤1：修改用户指定的字段**\n\n**步骤2：保持格式**\n确保每个字段保持专业医学文书格式。\n\n**原则：最小改动**\n只修改与用户要求直接相关的字段。\n\n在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：\n\`\`\`json\n{"fieldName": "修改后完整内容"}\n\`\`\`\n字段名必须与上方字段说明中的英文名一致。如果没有字段被修改，则不要输出 JSON 代码块。`;
+        apiMessages.unshift({ role: 'system', content: systemContent });
+      } catch (err) {
+        // Fallback: build system prompt locally if API fails
+        console.warn('[ChatArea] Failed to get prompt preview, using local fallback:', err.message);
+        let systemContent = `当前患者疾病：${store.state.currentDisease}。`;
+        let fieldDesc = '';
+        if (typeConfig?.fields) {
+          fieldDesc = '字段说明：\n' + typeConfig.fields.filter(f => f.enabled !== false).map(f => `- ${f.key}: ${f.label}`).join('\n');
+        }
+        if (currentData) {
+          systemContent += `\n当前病历内容（${tabLabel}）：\n${JSON.stringify(currentData, null, 2)}`;
+        }
+        systemContent += `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改【${tabLabel}】的病历。\n\n${fieldDesc}\n\n如果用户要求修改病历，请严格按以下步骤执行：\n\n**步骤1：修改用户指定的字段**\n\n**步骤2：保持格式**\n确保每个字段保持专业医学文书格式。\n\n**原则：最小改动**\n只修改与用户要求直接相关的字段。\n\n在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：\n\`\`\`json\n{"fieldName": "修改后完整内容"}\n\`\`\`\n字段名必须与上方字段说明中的英文名一致。如果没有字段被修改，则不要输出 JSON 代码块。`;
+        apiMessages.unshift({ role: 'system', content: systemContent });
+      }
     }
 
     try {

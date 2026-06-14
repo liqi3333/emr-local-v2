@@ -72,4 +72,3 @@ lsof -ti:8000 | xargs kill -9
 ## 规划中的功能
 
 - **同意书/护理记录离线模板**：`CONSENT_TEMPLATES` 和 `NURSING_TEMPLATES` 存储按疾病分类的模板。目前仅支持「腹股沟疝」，其他疾病需在 `templates.js` 中扩展。
-- **字段开关过滤**：`enabled===false` 的字段在渲染/保存/提示词生成/Mock 生成时均被跳过。

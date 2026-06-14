@@ -6,466 +6,202 @@
       "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份结构化电子病历。{{patientContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "chief": {
-          "label": "主诉",
-          "description": "主诉（格式：症状或体征+持续时间，如'发现右侧腹股沟区可复性肿物1年'。不超过20字，突出主要症状、部位、性质、时间要素）"
-        },
-        "hpi": {
-          "label": "现病史",
-          "description": "现病史（需包含：①起病情况——诱因、起病缓急、具体时间；②主要症状特点——部位、性质、程度、持续时间、加重或缓解因素；③伴随症状——有无发热、恶心、呕吐、腹胀、排便改变等，按系统鉴别行阴性症状描述；④诊疗经过——院外就诊、检查、用药及疗效；⑤发病以来一般情况——精神、饮食、睡眠、大小便、体重变化。内容应支撑鉴别诊断，时间线清晰）"
-        },
-        "past": {
-          "label": "既往史",
-          "description": "既往史（需分层书写，每条一行，前面加数字序号，如\"1. 慢性病史：高血压病史5年...\\n2. 手术外伤史：...\"。①慢性病史——高血压、糖尿病、冠心病等，含发现时间、控制情况、用药；②手术外伤史——手术名称、时间、有无并发症；③传染病史；④过敏史——具体过敏原及反应类型；⑤输血史；⑥吸烟饮酒史——包年、年限；⑦家族遗传病史。若患者为女性还需包含：⑧月经史——初潮年龄、周期、经期、末次月经、绝经年龄。无某项则标注'否认'）"
-        },
-        "exam": {
-          "label": "体格检查",
-          "description": "体格检查（格式：T P R BP 开头。全身情况→皮肤黏膜→淋巴结→头颈→胸廓肺→心脏→腹部→脊柱四肢→神经系统。专科查体需详细描述疾病相关阳性体征及阴性体征。参考《诊断学（第9版）》）"
-        },
-        "lab": {
-          "label": "辅助检查",
-          "description": "辅助检查（区分本院或外院，注明日期。包括：血常规、肝肾功能、凝血、感染筛查、心电图、胸片、疾病特异性检查如B超/CT/胃镜等。具体数值化，不可仅写'未见异常'）"
-        },
-        "diag": {
-          "label": "初步诊断",
-          "description": "诊断（分两部分写：①主要疾病诊断——规范全称，注明侧别、分期、分型、并发症；②伴发诊断——**必须逐条列出既往史中所有慢性病、手术史、传染病等并存疾病**，如「高血压病 2级（高危）」「2型糖尿病」「胆囊切除术后」等。**既往史中写到的疾病，诊断中必须有对应条目**，不可遗漏。所有诊断每条一行，前面加数字序号，如\"1. 右侧腹股沟疝（可复性）\\n2. 高血压病 2级（高危）\"。所有诊断须在前述病史体查中有依据）"
-        },
-        "workup": {
-          "label": "拟诊讨论",
-          "description": "拟诊讨论（分4部分，每条一行，前面加数字序号，如\"1. 患者信息：...\\n2. 主诉：...\"。①患者信息——引用患者基本资料（年龄、性别）；②主诉——引用主诉字段内容；③查体——引用体格检查中的关键阳性体征；④辅助检查——引用辅助检查中的关键阳性结果）"
-        },
-        "diff": {
-          "label": "鉴别诊断",
-          "description": "鉴别诊断（列出3-10个，按可能性降序排列，每条一行，前面加数字序号，如\"1. 腹股沟淋巴结肿大：...\\n2. 精索鞘膜积液：...\"。每个需包含：鉴别疾病名称、与本病鉴别要点——从症状、体征、辅助检查三方面对比、排除依据）"
-        },
-        "plan": {
-          "label": "治疗计划",
-          "description": "治疗计划（分7步，每条一行，前面加数字序号，如\"1. 完善检查：...\\n2. 首选方案：...\"。①完善检查——基本项目+疾病特异性项目，标注必查或可选；②首选方案——手术或药物名称、方式、入路、材料；③替代方案——列出其他可行方案及优劣势对比，仅限临床可行且指南推荐的方案；④术前准备；⑤术中要点；⑥术后处理；⑦出院计划。参考最新版相关疾病临床指南）"
-        }
+        "chief": { "label": "主诉" },
+        "hpi": { "label": "现病史" },
+        "past": { "label": "既往史" },
+        "exam": { "label": "体格检查" },
+        "lab": { "label": "辅助检查" },
+        "diag": { "label": "初步诊断" },
+        "workup": { "label": "拟诊讨论" },
+        "diff": { "label": "鉴别诊断" },
+        "plan": { "label": "治疗计划" }
       },
       "endingPrompt": "确保内容专业、准确、符合临床规范，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成电子病历。"
     },
     "attending": {
       "label": "主治查房",
-      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下首次病程录，生成一份主治医师首次查房病程记录。{{patientContext}}{{emrContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下首次病程录，生成一份主治医师首次查房病程记录。{{patientContext}}{{emrDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "supplementHistory": {
-          "label": "补充病史",
-          "description": "补充病史（根据首次病程录中现病史部分，补充追问得到的病史细节，包括起病情况、症状演变、诊治经过等；如无补充可写\"无特殊补充\"）"
-        },
-        "summary": {
-          "label": "病情摘要",
-          "description": "病情摘要（基于首次病程录精炼概括，每条一行，前面加数字序号。①患者基本信息——姓名、性别、年龄、床号；②入院日期、入院诊断；③主诉；④现病史摘要；⑤专科查体要点；⑥辅助检查关键阳性结果；⑦目前治疗方案及效果）"
-        },
-        "diagnosis": {
-          "label": "诊断",
-          "description": "诊断（在首次病程录诊断基础上，结合查房时的新信息确认或修正，分两部分写，每条一行，前面加数字序号。①主要疾病诊断——规范全称，注明侧别、分期、分型、并发症；②伴发诊断——逐条列出所有并存疾病。所有诊断须在病史体查中有依据）"
-        },
-        "analysis": {
-          "label": "分析",
-          "description": "分析（这是重点，需深入分析，每条一行，前面加数字序号。①本病诊断依据——从病史、查体、辅查三方面综合分析；②鉴别诊断——逐个排除，说明排除依据；③病情严重程度评估——有无并发症风险、是否需要手术；④治疗反应评估——对目前治疗的反应和调整建议）"
-        },
-        "treatment": {
-          "label": "下一步诊疗计划",
-          "description": "下一步诊疗计划（基于分析结果，给出具体可执行的计划，每条一行，前面加数字序号。①完善检查——尚需补充的检查项目及目的；②手术方式探讨——手术适应症、禁忌症、推荐术式及理由、替代术式比较；③调整治疗——是否需要调整用药或手术方案；④术前准备——如需手术，具体准备事项；⑤术后处理——如已手术，后续处理要点；⑥出院计划——预计出院时间及注意事项）"
-        },
-        "signed": {
-          "label": "签名",
-          "description": "签名（留空，由医生自行填写）"
-        }
+        "supplementHistory": { "label": "补充病史" },
+        "summary": { "label": "病情摘要" },
+        "diagnosis": { "label": "诊断" },
+        "analysis": { "label": "分析" },
+        "treatment": { "label": "下一步诊疗计划" },
+        "signed": { "label": "签名" }
       },
       "endingPrompt": "确保内容专业、准确、符合临床规范，体现主治医师的专业判断深度，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成主治医师首次查房病程记录。"
     },
     "chief": {
       "label": "主任查房",
-      "rolePrompt": "你是一位经验丰富的普外科主任医师。请基于以下病历资料，生成一份主任医师首次查房病程记录。{{patientContext}}{{emrContext}}{{attendingContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主任医师。请基于以下病历资料，生成一份主任医师首次查房病程记录。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "chiefSummary": {
-          "label": "病情摘要",
-          "description": "病情摘要（综合首次病程录和主治查房内容，精炼概括，每条一行，前面加数字序号。①患者基本信息；②入院日期、入院诊断；③主诉；④现病史摘要；⑤专科查体要点；⑥辅助检查关键阳性结果；⑦目前治疗方案及效果）"
-        },
-        "chiefDiagnosis": {
-          "label": "诊断",
-          "description": "诊断（在主治查房诊断基础上，结合主任查房时的新信息确认或修正，分两部分写，每条一行，前面加数字序号。①主要疾病诊断——规范全称，注明侧别、分期、分型、并发症；②伴发诊断——逐条列出所有并存疾病）"
-        },
-        "chiefAnalysis": {
-          "label": "分析",
-          "description": "分析（体现主任医师的专业判断深度，每条一行，前面加数字序号。①本病诊断依据——从病史、查体、辅查三方面综合分析；②鉴别诊断——逐个排除，说明排除依据；③病情严重程度评估——有无并发症风险、是否需要手术；④治疗反应评估——对目前治疗的反应和调整建议）"
-        },
-        "chiefTreatment": {
-          "label": "诊疗计划",
-          "description": "诊疗计划（基于分析结果，给出具体可执行的计划，每条一行，前面加数字序号。①完善检查；②手术方式探讨——手术适应症、禁忌症、推荐术式及理由；③调整治疗——是否需要调整用药或手术方案；④术前准备；⑤术后处理；⑥出院计划）"
-        },
-        "chiefSigned": {
-          "label": "医师签名",
-          "description": "医师签名（留空，由医生自行填写）"
-        }
+        "chiefSummary": { "label": "病情摘要" },
+        "chiefDiagnosis": { "label": "诊断" },
+        "chiefAnalysis": { "label": "分析" },
+        "chiefTreatment": { "label": "诊疗计划" },
+        "chiefSigned": { "label": "医师签名" }
       },
       "endingPrompt": "确保内容专业、准确、符合临床规范，体现主任医师的专业判断深度和指导性意见，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成主任医师首次查房病程记录。"
     },
     "preop": {
       "label": "术前小结",
-      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前小结。{{patientContext}}{{emrContext}}{{attendingContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前小结。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "preopDiagnosis": {
-          "label": "术前诊断",
-          "description": "术前诊断（规范全称，注明侧别、分型。如：右侧腹股沟斜疝）"
-        },
-        "preopIndication": {
-          "label": "手术指征",
-          "description": "手术指征（逐条列出，每条一行，前面加数字序号。①病史特点——症状持续时间、进展；②查体发现——肿物大小、可复性；③辅助检查——B超等影像结果；④综合评估——诊断明确，具有手术指征）"
-        },
-        "preopPlan": {
-          "label": "手术方案",
-          "description": "手术方案（每条一行，前面加数字序号。①手术名称——规范术式全称；②麻醉方式——椎管内麻醉/全麻等；③手术目的——修补缺损等；④手术风险——出血、感染等主要风险；⑤预计手术时间；⑥预计住院时间）"
-        },
-        "preopPreparation": {
-          "label": "术前准备",
-          "description": "术前准备（每条一行，前面加数字序号。①完善检查——血常规、凝血、心电图等；②备皮；③禁食禁饮时间；④抗生素皮试；⑤签署知情同意书）"
-        },
-        "preopRisk": {
-          "label": "风险评估",
-          "description": "风险评估（每条一行，前面加数字序号。①麻醉风险；②手术主要风险；③术后风险；④患者一般情况评估；⑤综合风险等级——低/中/高）"
-        },
-        "preopSigned": {
-          "label": "医师签名",
-          "description": "医师签名（留空，由医生自行填写）"
-        }
+        "preopDiagnosis": { "label": "术前诊断" },
+        "preopIndication": { "label": "手术指征" },
+        "preopPlan": { "label": "手术方案" },
+        "preopPreparation": { "label": "术前准备" },
+        "preopRisk": { "label": "风险评估" },
+        "preopSigned": { "label": "医师签名" }
       },
       "endingPrompt": "确保内容专业、准确、符合临床规范，体现术前评估的完整性和严谨性，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成术前小结。"
     },
     "discussion": {
       "label": "术前讨论",
-      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前讨论记录。{{patientContext}}{{emrContext}}{{attendingContext}}{{preopContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前讨论记录。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}{{preopDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "discussionParticipants": {
-          "label": "参加人员",
-          "description": "参加人员（格式：主持人：XXX主治医师\\n参加人员：XXX住院医师、XXX住院医师、XXX护士长）"
-        },
-        "discussionCaseSummary": {
-          "label": "病例摘要",
-          "description": "病例摘要（简明扼要，每条一行，前面加数字序号。①患者基本信息；②主诉；③现病史要点；④查体关键发现；⑤辅助检查结果）"
-        },
-        "discussionDiagnosis": {
-          "label": "诊断",
-          "description": "诊断（规范全称，如有多个诊断逐条列出）"
-        },
-        "discussionContent": {
-          "label": "讨论内容",
-          "description": "讨论内容（体现多位医师的讨论过程，包括：①住院医师汇报病史；②主治医师分析——诊断依据、鉴别诊断、手术方案；③护士长补充——术前宣教、准备情况）"
-        },
-        "discussionConclusion": {
-          "label": "讨论结论",
-          "description": "讨论结论（每条一行，前面加数字序号。①最终诊断；②治疗方案——术式选择及理由；③麻醉方式；④术前准备事项；⑤术后处理要点）"
-        },
-        "discussionSigned": {
-          "label": "记录者签名",
-          "description": "记录者签名（留空，由医生自行填写）"
-        }
+        "discussionParticipants": { "label": "参加人员" },
+        "discussionCaseSummary": { "label": "病例摘要" },
+        "discussionDiagnosis": { "label": "诊断" },
+        "discussionContent": { "label": "讨论内容" },
+        "discussionConclusion": { "label": "讨论结论" },
+        "discussionSigned": { "label": "记录者签名" }
       },
       "endingPrompt": "确保内容专业、准确、符合临床规范，体现术前讨论的多学科协作和规范化流程，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成术前讨论记录。"
     },
     "surgery": {
       "label": "手术记录",
-      "rolePrompt": "你是一位经验丰富的普外科手术医师。请基于以下病历资料，生成一份手术记录。{{patientContext}}{{emrContext}}{{preopContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科手术医师。请基于以下病历资料，生成一份手术记录。{{patientContext}}{{emrDataContext}}{{preopDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "surgeryName": {
-          "label": "手术名称",
-          "description": "手术名称（规范全称，如：右侧腹股沟疝无张力修补术（Lichtenstein术））"
-        },
-        "surgerySurgeon": {
-          "label": "手术者",
-          "description": "手术者（留空，由医生自行填写）"
-        },
-        "surgeryAssistant": {
-          "label": "助手",
-          "description": "助手（留空，由医生自行填写）"
-        },
-        "surgeryAnesthesia": {
-          "label": "麻醉方式",
-          "description": "麻醉方式（如：椎管内麻醉、全麻、局部浸润麻醉）"
-        },
-        "surgeryProcess": {
-          "label": "手术经过",
-          "description": "手术经过（详细描述手术步骤，每步一行，前面加数字序号。①麻醉成功，体位，消毒铺巾；②切口选择、长度、逐层切开；③探查所见；④关键操作步骤——疝囊游离、结扎、补片放置等；⑤缝合各层；⑥手术结束。注意：描述应具体、规范，体现手术操作的专业性）"
-        },
-        "surgeryFindings": {
-          "label": "术中发现",
-          "description": "术中发现（每条一行，前面加数字序号。①病变部位、大小、形态；②与周围组织关系；③术中出血量；④手术是否顺利）"
-        },
-        "surgerySigned": {
-          "label": "手术者签名",
-          "description": "手术者签名（留空，由医生自行填写。附手术开始时间、结束时间、历时）"
-        }
+        "surgeryName": { "label": "手术名称" },
+        "surgerySurgeon": { "label": "手术者" },
+        "surgeryAssistant": { "label": "助手" },
+        "surgeryAnesthesia": { "label": "麻醉方式" },
+        "surgeryProcess": { "label": "手术经过" },
+        "surgeryFindings": { "label": "术中发现" },
+        "surgerySigned": { "label": "手术者签名" }
       },
       "endingPrompt": "确保内容专业、准确、符合临床规范，体现手术记录的完整性和规范性，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成手术记录。"
     },
     "discharge": {
       "label": "出院小结",
-      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份出院小结。{{patientContext}}{{emrContext}}{{preopContext}}{{surgeryContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份出院小结。{{patientContext}}{{emrDataContext}}{{preopDataContext}}{{surgeryDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "dischargeAdmissionDate": {
-          "label": "入院日期",
-          "description": "入院日期（格式：____年____月____日）"
-        },
-        "dischargeDate": {
-          "label": "出院日期",
-          "description": "出院日期（格式：____年____月____日）"
-        },
-        "dischargeDiagnosis": {
-          "label": "出院诊断",
-          "description": "出院诊断（规范全称，如有多个诊断逐条列出。如：右侧腹股沟斜疝\\n右侧腹股沟疝无张力修补术后）"
-        },
-        "dischargeTreatment": {
-          "label": "治疗经过",
-          "description": "治疗经过（简明描述入院后诊疗过程：①完善检查；②手术——日期、术式；③术后处理——抗感染、止痛、补液等）"
-        },
-        "dischargeOutcome": {
-          "label": "出院情况",
-          "description": "出院情况（描述患者出院时状态：一般情况、切口愈合、并发症、复查结果等）"
-        },
-        "dischargeAdvice": {
-          "label": "出院医嘱",
-          "description": "出院医嘱（每条一行，前面加数字序号。①休息与活动限制；②饮食指导；③切口护理与拆线时间；④异常情况就诊指征；⑤复查时间安排；⑥用药指导）"
-        },
-        "dischargeSigned": {
-          "label": "主治医师签名",
-          "description": "主治医师签名（留空，由医生自行填写）"
-        }
+        "dischargeAdmissionDate": { "label": "入院日期" },
+        "dischargeDate": { "label": "出院日期" },
+        "dischargeDiagnosis": { "label": "出院诊断" },
+        "dischargeTreatment": { "label": "治疗经过" },
+        "dischargeOutcome": { "label": "出院情况" },
+        "dischargeAdvice": { "label": "出院医嘱" },
+        "dischargeSigned": { "label": "主治医师签名" }
       },
       "endingPrompt": "确保内容专业、准确、符合临床规范，体现出院评估的完整性和医嘱的可执行性，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成出院小结。"
     },
     "surgeryConsent": {
       "label": "手术同意书",
-      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份手术知情同意书。{{patientContext}}{{emrContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份手术知情同意书。{{patientContext}}{{emrDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "surgeryName": {
-          "label": "手术名称",
-          "description": "手术名称（规范全称，如：右侧腹股沟疝无张力修补术（Lichtenstein术））"
-        },
-        "surgeryIndication": {
-          "label": "手术指征",
-          "description": "手术指征（逐条列出，每条一行，前面加数字序号。①病史特点——症状持续时间、进展；②查体发现——肿物大小、可复性；③辅助检查——B超等影像结果；④综合评估——诊断明确，具有手术指征）"
-        },
-        "surgeryRisks": {
-          "label": "手术风险",
-          "description": "手术风险（逐条列出主要风险，每条一行，前面加数字序号。①出血——术中术后出血可能；②感染——切口感染、深部感染；③损伤周围组织——精索、输精管、肠管等损伤；④麻醉意外；⑤补片相关——排斥、移位、慢性疼痛；⑥复发——术后复发可能；⑦其他——如阴囊血肿、睾丸萎缩等）"
-        },
-        "alternatives": {
-          "label": "替代方案",
-          "description": "替代方案（列出其他可行治疗方案及利弊，每条一行，前面加数字序号。①保守治疗——疝带压迫，适用于暂不耐受手术者；②传统疝修补术（Bassini法）——自身组织修补，复发率较高；③腹腔镜疝修补术——微创，适用于双侧或复发疝）"
-        },
-        "patientSignature": {
-          "label": "患者/家属签名",
-          "description": "患者/家属签名（留空，由患者或家属自行填写）"
-        },
-        "consentDate": {
-          "label": "签署日期",
-          "description": "签署日期（格式：____年____月____日）"
-        }
+        "surgeryName": { "label": "手术名称" },
+        "surgeryIndication": { "label": "手术指征" },
+        "surgeryRisks": { "label": "手术风险" },
+        "alternatives": { "label": "替代方案" },
+        "patientSignature": { "label": "患者/家属签名" },
+        "consentDate": { "label": "签署日期" }
       },
       "endingPrompt": "确保内容专业、准确、符合知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成手术知情同意书。"
     },
     "bloodTransfusionConsent": {
       "label": "输血同意书",
-      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份输血知情同意书。{{patientContext}}{{emrContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份输血知情同意书。{{patientContext}}{{emrDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "bloodType": {
-          "label": "血型",
-          "description": "血型（如：A型Rh阳性，如不确定写\"待查\"）"
-        },
-        "transfusionReason": {
-          "label": "输血原因",
-          "description": "输血原因（简明说明输血指征，如：Hb<70g/L，或术中出血量大需补充血容量等）"
-        },
-        "bloodProducts": {
-          "label": "血液成分",
-          "description": "血液成分（逐条列出，每条一行，前面加数字序号。如：①悬浮红细胞X单位；②新鲜冰冻血浆X毫升；③血小板X治疗量等）"
-        },
-        "transfusionRisks": {
-          "label": "输血风险",
-          "description": "输血风险（逐条列出主要风险，每条一行，前面加数字序号。①过敏反应——皮疹、呼吸困难、过敏性休克；②溶血反应——发热、寒战、血红蛋白尿；③感染风险——肝炎、HIV等血源性传播疾病（极低概率）；④循环超负荷——心衰、肺水肿；⑤其他——输血相关急性肺损伤等）"
-        },
-        "alternatives": {
-          "label": "替代方案",
-          "description": "替代方案（如：①自体输血——术前预存自体血；②血液稀释法——术中血液稀释；③止血药物应用——减少出血）"
-        },
-        "patientSignature": {
-          "label": "患者/家属签名",
-          "description": "患者/家属签名（留空，由患者或家属自行填写）"
-        },
-        "consentDate": {
-          "label": "签署日期",
-          "description": "签署日期（格式：____年____月____日）"
-        }
+        "bloodType": { "label": "血型" },
+        "transfusionReason": { "label": "输血原因" },
+        "bloodProducts": { "label": "血液成分" },
+        "transfusionRisks": { "label": "输血风险" },
+        "alternatives": { "label": "替代方案" },
+        "patientSignature": { "label": "患者/家属签名" },
+        "consentDate": { "label": "签署日期" }
       },
       "endingPrompt": "确保内容专业、准确、符合输血知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成输血知情同意书。"
     },
     "anesthesiaConsent": {
       "label": "麻醉同意书",
-      "rolePrompt": "你是一位经验丰富的麻醉科主治医师。请根据疾病\"{{disease}}\"生成一份麻醉知情同意书。{{patientContext}}{{emrContext}}{{preopContext}}",
+      "rolePrompt": "你是一位经验丰富的麻醉科主治医师。请根据疾病\"{{disease}}\"生成一份麻醉知情同意书。{{patientContext}}{{emrDataContext}}{{preopDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "anesthesiaType": {
-          "label": "麻醉方式",
-          "description": "麻醉方式（如：椎管内麻醉（腰硬联合麻醉）、全身麻醉、局部浸润麻醉等）"
-        },
-        "surgeryName": {
-          "label": "拟行手术",
-          "description": "拟行手术（规范全称，如：右侧腹股沟疝无张力修补术（Lichtenstein术））"
-        },
-        "anesthesiaRisks": {
-          "label": "麻醉风险",
-          "description": "麻醉风险（逐条列出主要风险，每条一行，前面加数字序号。①呼吸系统——呼吸抑制、误吸、喉痉挛、支气管痉挛；②心血管系统——低血压、心律失常、心跳骤停；③神经系统——头痛、神经损伤、硬膜外血肿；④消化系统——恶心呕吐；⑤过敏反应——局麻药过敏、肌松药过敏；⑥其他——高热、恶性高热等）"
-        },
-        "alternatives": {
-          "label": "替代方案",
-          "description": "替代麻醉方案（如：①全身麻醉——适用于椎管内麻醉禁忌者；②局部浸润麻醉——适用于简单短小手术；③神经阻滞麻醉——适用于特定手术区域）"
-        },
-        "patientCondition": {
-          "label": "患者情况",
-          "description": "患者情况（ASA分级、合并症评估，如：ASA II级，否认高血压、糖尿病等慢性病史）"
-        },
-        "patientSignature": {
-          "label": "患者/家属签名",
-          "description": "患者/家属签名（留空，由患者或家属自行填写）"
-        },
-        "consentDate": {
-          "label": "签署日期",
-          "description": "签署日期（格式：____年____月____日）"
-        }
+        "anesthesiaType": { "label": "麻醉方式" },
+        "surgeryName": { "label": "拟行手术" },
+        "anesthesiaRisks": { "label": "麻醉风险" },
+        "alternatives": { "label": "替代方案" },
+        "patientCondition": { "label": "患者情况" },
+        "patientSignature": { "label": "患者/家属签名" },
+        "consentDate": { "label": "签署日期" }
       },
       "endingPrompt": "确保内容专业、准确、符合麻醉知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成麻醉知情同意书。"
     },
     "nursingAssessment": {
       "label": "护理评估",
-      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份入院护理评估单。{{patientContext}}{{emrContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份入院护理评估单。{{patientContext}}{{emrDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "admissionTime": {
-          "label": "入院时间",
-          "description": "入院时间（格式：____年____月____日 ____时____分）"
-        },
-        "vitalSigns": {
-          "label": "生命体征",
-          "description": "生命体征（T、P、R、BP、疼痛评分，如：T 36.5℃ P 78次/分 R 18次/分 BP 120/80mmHg 疼痛评分0分）"
-        },
-        "skinCondition": {
-          "label": "皮肤情况",
-          "description": "皮肤情况（完整/破损/压疮等，如：皮肤完整，无破损、无压疮，弹性可）"
-        },
-        "mobility": {
-          "label": "活动能力",
-          "description": "活动能力（自理/协助/卧床等，如：活动自如，可自主行走）"
-        },
-        "nutrition": {
-          "label": "营养状况",
-          "description": "营养状况（良好/一般/差，如：营养中等，BMI正常范围）"
-        },
-        "mentalStatus": {
-          "label": "精神状态",
-          "description": "精神状态（清醒/嗜睡/焦虑等，如：神志清楚，精神可，对答切题）"
-        },
-        "riskAssessment": {
-          "label": "风险评估",
-          "description": "风险评估（逐条评估，每条一行，前面加数字序号。①跌倒风险——低/中/高危；②压疮风险——低/中/高危；③管道滑脱风险——无/低/中/高危；④深静脉血栓风险——低/中/高危；⑤营养风险——无/轻/中/重度）"
-        },
-        "nursingDiagnosis": {
-          "label": "护理诊断",
-          "description": "护理诊断（列出主要护理问题，每条一行，前面加数字序号。如：①疼痛——与手术创伤有关；②焦虑——与担心手术预后有关；③知识缺乏——与缺乏疾病相关知识有关）"
-        }
+        "admissionTime": { "label": "入院时间" },
+        "vitalSigns": { "label": "生命体征" },
+        "skinCondition": { "label": "皮肤情况" },
+        "mobility": { "label": "活动能力" },
+        "nutrition": { "label": "营养状况" },
+        "mentalStatus": { "label": "精神状态" },
+        "riskAssessment": { "label": "风险评估" },
+        "nursingDiagnosis": { "label": "护理诊断" }
       },
       "endingPrompt": "确保内容专业、准确、符合护理评估规范，评估全面准确，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成入院护理评估单。"
     },
     "nursingPlan": {
       "label": "护理计划",
-      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份护理计划。{{patientContext}}{{emrContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份护理计划。{{patientContext}}{{emrDataContext}}{{nursingAssessmentDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "nursingDiagnosis": {
-          "label": "护理诊断",
-          "description": "护理诊断（基于评估结果列出护理问题，每条一行，前面加数字序号。如：①疼痛——与手术创伤有关；②焦虑——与担心手术预后有关；③躯体移动障碍——与术后卧床有关；④知识缺乏——与缺乏疾病及术后康复知识有关）"
-        },
-        "goals": {
-          "label": "护理目标",
-          "description": "护理目标（分短期和长期目标，每条一行，前面加数字序号。①短期目标——患者疼痛缓解、焦虑减轻、生命体征平稳；②长期目标——患者掌握术后自我护理知识、能独立完成日常活动、顺利康复出院）"
-        },
-        "interventions": {
-          "label": "护理措施",
-          "description": "护理措施（具体可执行的护理操作，每条一行，前面加数字序号。①疼痛护理——评估疼痛程度、遵医嘱给予镇痛药、非药物镇痛；②体位护理——术后平卧位、膝下垫软枕减轻腹壁张力；③切口护理——观察切口渗血渗液、保持敷料干燥清洁；④阴囊护理——如疝囊进入阴囊，术后托起阴囊预防血肿；⑤活动指导——术后第1天可下床活动、避免剧烈运动；⑥饮食指导——术后6小时可进流质→半流质→普食；⑦用药护理——遵医嘱给予抗感染、止痛等药物；⑧心理护理——安慰患者、解答疑问、减轻焦虑）"
-        },
-        "evaluation": {
-          "label": "评价标准",
-          "description": "评价标准（如何评价护理效果，每条一行，前面加数字序号。①疼痛评分≤3分；②切口愈合良好，无红肿渗液；③患者能复述术后注意事项；④患者能独立完成日常活动；⑤患者满意度≥90%）"
-        },
-        "healthEducation": {
-          "label": "健康教育",
-          "description": "健康教育（患者及家属宣教内容，每条一行，前面加数字序号。①疾病知识——腹股沟疝的病因、治疗方式；②术前注意事项——禁食禁饮时间、备皮；③术后护理——切口保护、阴囊托起；④活动指导——避免剧烈运动3个月、避免增加腹压；⑤饮食指导——保持大便通畅、高蛋白饮食；⑥复查安排——术后1个月、3个月、6个月复查）"
-        },
-        "dischargePlan": {
-          "label": "出院计划",
-          "description": "出院计划（出院准备、随访安排，每条一行，前面加数字序号。①出院标准——切口愈合良好、无并发症、体温正常；②出院指导——休息、饮食、活动、切口护理；③随访安排——术后1个月、3个月、6个月门诊复查；④紧急就诊指征——切口红肿、发热、腹痛加剧等）"
-        }
+        "nursingDiagnosis": { "label": "护理诊断" },
+        "goals": { "label": "护理目标" },
+        "interventions": { "label": "护理措施" },
+        "evaluation": { "label": "评价标准" },
+        "healthEducation": { "label": "健康教育" },
+        "dischargePlan": { "label": "出院计划" }
       },
       "endingPrompt": "确保内容专业、准确、符合护理计划规范，措施具体可执行，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成护理计划。"
     },
     "nursingRecordSheet": {
       "label": "护理记录单",
-      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份护理记录单。{{patientContext}}{{emrContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份护理记录单。{{patientContext}}{{emrDataContext}}{{nursingPlanDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
-        "recordDate": {
-          "label": "记录日期",
-          "description": "记录日期（格式：____年____月____日）"
-        },
-        "recordTime": {
-          "label": "记录时间",
-          "description": "记录时间（格式：____时____分）"
-        },
-        "vitalSigns": {
-          "label": "生命体征",
-          "description": "生命体征（T、P、R、BP，如：T 36.5℃ P 78次/分 R 18次/分 BP 120/80mmHg）"
-        },
-        "intakeOutput": {
-          "label": "出入量",
-          "description": "出入量（入量：输液Xml、饮食等；出量：尿量Xml、引流Xml等）"
-        },
-        "medication": {
-          "label": "用药记录",
-          "description": "用药记录（药物名称、剂量、途径、时间，如：头孢替安2g ivgtt q12h）"
-        },
-        "nursingInterventions": {
-          "label": "护理措施",
-          "description": "护理措施（执行的护理操作及效果，如：协助患者下床活动，患者诉切口疼痛可耐受）"
-        },
-        "patientCondition": {
-          "label": "患者情况",
-          "description": "患者情况（主诉、症状、体征变化，如：患者神志清楚，切口敷料干燥，无渗血渗液，阴囊无肿胀）"
-        },
-        "nurseSignature": {
-          "label": "护士签名",
-          "description": "护士签名（留空，由护士自行填写）"
-        }
+        "recordDate": { "label": "记录日期" },
+        "recordTime": { "label": "记录时间" },
+        "vitalSigns": { "label": "生命体征" },
+        "intakeOutput": { "label": "出入量" },
+        "medication": { "label": "用药记录" },
+        "nursingInterventions": { "label": "护理措施" },
+        "patientCondition": { "label": "患者情况" },
+        "nurseSignature": { "label": "护士签名" }
       },
       "endingPrompt": "确保内容专业、准确、符合护理记录规范，记录及时准确，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成护理记录单。"

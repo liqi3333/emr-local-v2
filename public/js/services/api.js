@@ -640,3 +640,50 @@ export async function getPromptTemplateStatus(name) {
   }
   return res.json();
 }
+
+/**
+ * Get assembled system + user prompt for a given type and context.
+ * Used by ChatArea to inherit PromptEditor templates.
+ */
+export async function getPromptPreview(templateKey, context = {}) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/preview/${encodeURIComponent(templateKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ context }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Create a skeleton entry in the active prompt template for a new type.
+ */
+export async function createPromptTemplateSkeleton(templateKey, label) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/skeleton`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ templateKey, label }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Remove a type from all custom prompt templates.
+ */
+export async function cleanupPromptTemplate(templateKey) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/cleanup/${encodeURIComponent(templateKey)}`, {
+    method: 'POST',
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
