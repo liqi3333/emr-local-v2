@@ -155,6 +155,7 @@ router.post('/records/:typeId/generate', async (req, res) => {
       const defaults = {};
       if (typeConfig.fields) {
         for (const field of typeConfig.fields) {
+          if (field.enabled === false) continue;
           defaults[field.key] = '';
         }
       }
@@ -235,7 +236,7 @@ for (const [oldPath, typeId] of Object.entries(_DEPRECATED_MAP)) {
         const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
         emr = JSON.parse(cleaned);
         const defaults = {};
-        if (result.type.fields) { for (const f of result.type.fields) defaults[f.key] = ''; }
+        if (result.type.fields) { for (const f of result.type.fields) { if (f.enabled === false) continue; defaults[f.key] = ''; } }
         emr = { ...defaults, ...emr };
         if (emr && typeof emr === 'object') {
           for (const [k, v] of Object.entries(emr)) {

@@ -359,7 +359,15 @@ export class EmrPreview {
           const record = await db.getRecordById(recordId);
           if (record) {
             const content = typeof record.content === 'string' ? (() => { try { return JSON.parse(record.content); } catch { return {}; } })() : (record.content || {});
-            store.setTypeData(record.type, content);
+            const typeConfig = store.getTypeConfig(record.type);
+            const enabledKeys = new Set(
+              (typeConfig?.fields || []).filter(f => f.enabled !== false).map(f => f.key)
+            );
+            const filtered = {};
+            for (const [k, v] of Object.entries(content)) {
+              if (enabledKeys.size === 0 || enabledKeys.has(k)) filtered[k] = v;
+            }
+            store.setTypeData(record.type, filtered);
             close();
             store.toast('success', '已加载病历');
           }

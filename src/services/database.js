@@ -306,6 +306,7 @@ class EMRDatabase {
     const content = {};
     if (typeConfig && Array.isArray(typeConfig.fields)) {
       for (const field of typeConfig.fields) {
+        if (field.enabled === false) continue;
         content[field.key] = record[field.key] || '';
       }
     }

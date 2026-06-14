@@ -220,8 +220,16 @@ export class ChatArea {
     // 3. Route parsed data to the correct store state based on active type
     if (!parsed) return;
     const activeType = store.state.activeType || 'firstCourse';
+    const typeConfig = store.getTypeConfig(activeType);
+    const enabledKeys = new Set(
+      (typeConfig?.fields || []).filter(f => f.enabled !== false).map(f => f.key)
+    );
+    const filtered = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (enabledKeys.size === 0 || enabledKeys.has(k)) filtered[k] = v;
+    }
     const current = store.getActiveTypeData() || {};
-    store.setTypeData(activeType, { ...current, ...parsed });
+    store.setTypeData(activeType, { ...current, ...filtered });
     store.toast('info', '病历已更新');
   }
 
