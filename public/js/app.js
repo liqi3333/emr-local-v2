@@ -9,6 +9,7 @@ import { ChatArea } from './components/ChatArea.js';
 import { EmrPreview } from './components/EmrPreview.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
 import { PatientManager } from './components/PatientManager.js';
+import { recordTypeApi } from './services/recordTypeApi.js';
 
 // ─── Global references for cleanup ───
 let components = [];
@@ -115,7 +116,8 @@ function setupSidebarToggle() {
 function setupExport() {
   const btn = document.getElementById('btnExport');
   btn?.addEventListener('click', () => {
-    if (store.state.emrData) {
+    const hasData = store.state.emrData || store.getActiveTypeData();
+    if (hasData) {
       window.print();
     } else {
       store.toast('info', '请先生成病历');
@@ -140,6 +142,99 @@ function setupPromptsButton() {
   const btn = document.getElementById('btnPrompts');
   btn?.addEventListener('click', () => {
     window.open('/prompts', '_blank');
+  });
+}
+
+// ─── Record Types Button ───
+function setupRecordTypesButton() {
+  const btn = document.getElementById('btnRecordTypes');
+  btn?.addEventListener('click', () => {
+    window.open('/record-types', '_blank');
+  });
+}
+
+// ─── Load Registry from API ───
+async function loadRegistry() {
+  try {
+    const registry = await recordTypeApi.getRegistry();
+    store.setState({ recordRegistry: registry });
+    console.log('[EMR v2] Registry loaded:', registry.categories.length, 'categories');
+  } catch (err) {
+    console.error('[EMR v2] Failed to load registry:', err);
+    store.toast('error', '加载病历类型配置失败');
+  }
+}
+
+// ─── Render category tabs + type tabs from registry ───
+function renderCategoryTabs() {
+  const categoryTabs = document.getElementById('categoryTabs');
+  const typeTabs = document.getElementById('typeTabs');
+  if (!categoryTabs || !typeTabs) return;
+
+  const reg = store.state.recordRegistry;
+  if (!reg) return;
+
+  const activeCategory = store.state.activeCategory;
+  const activeType = store.state.activeType;
+
+  // Render only enabled categories
+  categoryTabs.innerHTML = reg.categories
+    .filter(cat => cat.enabled !== false)
+    .map(cat => {
+      const isActive = cat.id === activeCategory;
+      return `<button class="cat-tab ${isActive ? 'active' : ''}" data-category="${cat.id}">${cat.icon || ''} ${cat.label}</button>`;
+    }).join('');
+
+  // Bind category tab clicks
+  categoryTabs.querySelectorAll('.cat-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const catId = tab.dataset.category;
+      const cat = store.state.recordRegistry?.categories.find(c => c.id === catId);
+      if (cat && cat.types.length > 0) {
+        const firstEnabledType = cat.types.find(t => t.enabled !== false);
+        if (firstEnabledType) {
+          store.setState({ activeCategory: catId, activeType: firstEnabledType.id });
+          store.setActiveType(firstEnabledType.id);
+          renderCategoryTabs();
+          renderTypeTabs();
+        }
+      }
+    });
+  });
+
+  // Render type tabs for active category
+  renderTypeTabs();
+}
+
+function renderTypeTabs() {
+  const typeTabs = document.getElementById('typeTabs');
+  if (!typeTabs) return;
+
+  const reg = store.state.recordRegistry;
+  if (!reg) return;
+
+  const activeCategory = store.state.activeCategory;
+  const activeType = store.state.activeType;
+  const cat = reg.categories.find(c => c.id === activeCategory);
+  if (!cat) {
+    typeTabs.innerHTML = '';
+    return;
+  }
+
+  typeTabs.innerHTML = cat.types
+    .filter(t => t.enabled !== false)
+    .map(t => {
+      const isActive = t.id === activeType;
+      return `<button class="type-tab ${isActive ? 'active' : ''}" data-type="${t.id}">${t.label}</button>`;
+    }).join('');
+
+  // Bind type tab clicks
+  typeTabs.querySelectorAll('.type-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const typeId = tab.dataset.type;
+      store.setActiveType(typeId);
+      renderTypeTabs();
+    });
   });
 }
 
@@ -184,12 +279,16 @@ async function init() {
     // Wait for DB
     await db.ensureSamplePatient();
 
+    // Load registry from API (must be before component init)
+    await loadRegistry();
+
     // Setup basic UI
     setupKeyboardShortcuts();
     setupSidebarToggle();
     setupExport();
     setupPatientButton();
     setupPromptsButton();
+    setupRecordTypesButton();
     setupPaneDivider();
 
     // Update model badge
@@ -204,6 +303,32 @@ async function init() {
     store.subscribe('loadingLabel', renderLoading);
     store.subscribe('chatMessages', updateChatCount);
 
+    // Render category/type tabs from registry
+    renderCategoryTabs();
+    store.subscribe('recordRegistry', () => renderCategoryTabs());
+    store.subscribe('activeCategory', () => renderCategoryTabs());
+    store.subscribe('activeType', () => renderTypeTabs());
+
+  // Re-render when registry changes (fields may have been toggled)
+  document.addEventListener('visibilitychange', async () => {
+    if (!document.hidden) {
+      await loadRegistry();
+      // If active type is now disabled, switch to first enabled type
+      const activeType = store.state.activeType;
+      const typeConfig = store.getTypeConfig(activeType);
+      if (typeConfig && typeConfig.enabled === false) {
+        const reg = store.state.recordRegistry;
+        for (const cat of reg.categories) {
+          const firstEnabled = cat.types.find(t => t.enabled !== false);
+          if (firstEnabled) {
+            store.setActiveType(firstEnabled.id);
+            break;
+          }
+        }
+      }
+    }
+  });
+
     // Initialize components
     const diseaseTree = new DiseaseTree(document.getElementById('diseaseTree'));
     await diseaseTree.render();
@@ -217,7 +342,7 @@ async function init() {
     await chatArea.render();
     components.push(chatArea);
 
-    const emrPreview = new EmrPreview(document.getElementById('emrPreview'));
+    const emrPreview = new EmrPreview(document.getElementById('dynamicPreview'));
     await emrPreview.render();
     components.push(emrPreview);
 

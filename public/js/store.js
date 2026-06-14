@@ -23,8 +23,13 @@ class Store {
       records: [],            // EMRRecord[] (loaded from DB)
       searchQuery: '',        // disease search filter
       sidebarCollapsed: false,
-      activeTab: 'firstCourse', // current EMR tab: 'firstCourse'|'attendingRound'|'chiefRound'|'preop'|'discussion'|'surgery'|'discharge'
+      activeTab: 'firstCourse', // DEPRECATED: kept for backward compat, use activeType instead
       toastMessage: null,     // { type: 'success'|'error'|'info', text }
+
+      // ─── Registry-driven state (Phase 4) ───
+      recordRegistry: null,   // { categories: [...] } from API, null until loaded
+      activeCategory: 'clinicalRecords', // current category ID
+      activeType: 'firstCourse',         // current type ID within active category
     };
   }
 
@@ -52,10 +57,14 @@ class Store {
     }
   }
 
-  /** Reset state to defaults (except patients/records from DB) */
+  /** Reset state to defaults (except patients/records from DB and registry) */
   reset() {
     const prevState = { ...this._state };
-    const keep = { patients: this._state.patients, records: this._state.records };
+    const keep = {
+      patients: this._state.patients,
+      records: this._state.records,
+      recordRegistry: this._state.recordRegistry,
+    };
     this._state = {
       currentPatient: null,
       currentDisease: null,
@@ -67,6 +76,8 @@ class Store {
       searchQuery: '',
       sidebarCollapsed: false,
       toastMessage: null,
+      activeCategory: 'clinicalRecords',
+      activeType: 'firstCourse',
       ...keep,
     };
     this._notify(Object.keys(this._state), prevState);
@@ -94,6 +105,67 @@ class Store {
         this.setState({ toastMessage: null });
       }
     }, 3000);
+  }
+
+  // ─── Registry-driven helpers ───
+
+  /** Get the type config object for a typeId from the registry */
+  getTypeConfig(typeId) {
+    const reg = this._state.recordRegistry;
+    if (!reg) return null;
+    for (const cat of reg.categories) {
+      const found = cat.types.find(t => t.id === typeId);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  /** Get the category config object for a categoryId from the registry */
+  getCategoryConfig(categoryId) {
+    const reg = this._state.recordRegistry;
+    if (!reg) return null;
+    return reg.categories.find(c => c.id === categoryId) || null;
+  }
+
+  /** Get data for the currently active type (reads from the appropriate store key) */
+  getActiveTypeData() {
+    const typeConfig = this.getTypeConfig(this._state.activeType);
+    if (!typeConfig) return null;
+    return this._state[typeConfig.storeKey] || null;
+  }
+
+  /** Set data for a given typeId (writes to the appropriate store key) */
+  setTypeData(typeId, data) {
+    const typeConfig = this.getTypeConfig(typeId);
+    if (typeConfig) {
+      this.setState({ [typeConfig.storeKey]: data });
+    }
+  }
+
+  /**
+   * Set active type and sync backward-compat activeTab.
+   * Call this when user clicks a type tab.
+   */
+  setActiveType(typeId) {
+    const typeConfig = this.getTypeConfig(typeId);
+    const categoryId = typeConfig
+      ? this._findCategoryForType(typeId)
+      : this._state.activeCategory;
+    this.setState({
+      activeType: typeId,
+      activeCategory: categoryId || this._state.activeCategory,
+      activeTab: typeId, // backward compat for old EmrPreview.js
+    });
+  }
+
+  /** Find which category contains the given typeId */
+  _findCategoryForType(typeId) {
+    const reg = this._state.recordRegistry;
+    if (!reg) return null;
+    for (const cat of reg.categories) {
+      if (cat.types.some(t => t.id === typeId)) return cat.id;
+    }
+    return null;
   }
 
   _notify(changedKeys, prevState) {

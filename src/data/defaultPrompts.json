@@ -247,6 +247,228 @@
       },
       "endingPrompt": "确保内容专业、准确、符合临床规范，体现出院评估的完整性和医嘱的可执行性，所有字段互相对应、逻辑自洽。",
       "userPrompt": "请为\"{{disease}}\"生成出院小结。"
+    },
+    "surgeryConsent": {
+      "label": "手术同意书",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份手术知情同意书。{{patientContext}}{{emrContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "surgeryName": {
+          "label": "手术名称",
+          "description": "手术名称（规范全称，如：右侧腹股沟疝无张力修补术（Lichtenstein术））"
+        },
+        "surgeryIndication": {
+          "label": "手术指征",
+          "description": "手术指征（逐条列出，每条一行，前面加数字序号。①病史特点——症状持续时间、进展；②查体发现——肿物大小、可复性；③辅助检查——B超等影像结果；④综合评估——诊断明确，具有手术指征）"
+        },
+        "surgeryRisks": {
+          "label": "手术风险",
+          "description": "手术风险（逐条列出主要风险，每条一行，前面加数字序号。①出血——术中术后出血可能；②感染——切口感染、深部感染；③损伤周围组织——精索、输精管、肠管等损伤；④麻醉意外；⑤补片相关——排斥、移位、慢性疼痛；⑥复发——术后复发可能；⑦其他——如阴囊血肿、睾丸萎缩等）"
+        },
+        "alternatives": {
+          "label": "替代方案",
+          "description": "替代方案（列出其他可行治疗方案及利弊，每条一行，前面加数字序号。①保守治疗——疝带压迫，适用于暂不耐受手术者；②传统疝修补术（Bassini法）——自身组织修补，复发率较高；③腹腔镜疝修补术——微创，适用于双侧或复发疝）"
+        },
+        "patientSignature": {
+          "label": "患者/家属签名",
+          "description": "患者/家属签名（留空，由患者或家属自行填写）"
+        },
+        "consentDate": {
+          "label": "签署日期",
+          "description": "签署日期（格式：____年____月____日）"
+        }
+      },
+      "endingPrompt": "确保内容专业、准确、符合知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成手术知情同意书。"
+    },
+    "bloodTransfusionConsent": {
+      "label": "输血同意书",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份输血知情同意书。{{patientContext}}{{emrContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "bloodType": {
+          "label": "血型",
+          "description": "血型（如：A型Rh阳性，如不确定写\"待查\"）"
+        },
+        "transfusionReason": {
+          "label": "输血原因",
+          "description": "输血原因（简明说明输血指征，如：Hb<70g/L，或术中出血量大需补充血容量等）"
+        },
+        "bloodProducts": {
+          "label": "血液成分",
+          "description": "血液成分（逐条列出，每条一行，前面加数字序号。如：①悬浮红细胞X单位；②新鲜冰冻血浆X毫升；③血小板X治疗量等）"
+        },
+        "transfusionRisks": {
+          "label": "输血风险",
+          "description": "输血风险（逐条列出主要风险，每条一行，前面加数字序号。①过敏反应——皮疹、呼吸困难、过敏性休克；②溶血反应——发热、寒战、血红蛋白尿；③感染风险——肝炎、HIV等血源性传播疾病（极低概率）；④循环超负荷——心衰、肺水肿；⑤其他——输血相关急性肺损伤等）"
+        },
+        "alternatives": {
+          "label": "替代方案",
+          "description": "替代方案（如：①自体输血——术前预存自体血；②血液稀释法——术中血液稀释；③止血药物应用——减少出血）"
+        },
+        "patientSignature": {
+          "label": "患者/家属签名",
+          "description": "患者/家属签名（留空，由患者或家属自行填写）"
+        },
+        "consentDate": {
+          "label": "签署日期",
+          "description": "签署日期（格式：____年____月____日）"
+        }
+      },
+      "endingPrompt": "确保内容专业、准确、符合输血知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成输血知情同意书。"
+    },
+    "anesthesiaConsent": {
+      "label": "麻醉同意书",
+      "rolePrompt": "你是一位经验丰富的麻醉科主治医师。请根据疾病\"{{disease}}\"生成一份麻醉知情同意书。{{patientContext}}{{emrContext}}{{preopContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "anesthesiaType": {
+          "label": "麻醉方式",
+          "description": "麻醉方式（如：椎管内麻醉（腰硬联合麻醉）、全身麻醉、局部浸润麻醉等）"
+        },
+        "surgeryName": {
+          "label": "拟行手术",
+          "description": "拟行手术（规范全称，如：右侧腹股沟疝无张力修补术（Lichtenstein术））"
+        },
+        "anesthesiaRisks": {
+          "label": "麻醉风险",
+          "description": "麻醉风险（逐条列出主要风险，每条一行，前面加数字序号。①呼吸系统——呼吸抑制、误吸、喉痉挛、支气管痉挛；②心血管系统——低血压、心律失常、心跳骤停；③神经系统——头痛、神经损伤、硬膜外血肿；④消化系统——恶心呕吐；⑤过敏反应——局麻药过敏、肌松药过敏；⑥其他——高热、恶性高热等）"
+        },
+        "alternatives": {
+          "label": "替代方案",
+          "description": "替代麻醉方案（如：①全身麻醉——适用于椎管内麻醉禁忌者；②局部浸润麻醉——适用于简单短小手术；③神经阻滞麻醉——适用于特定手术区域）"
+        },
+        "patientCondition": {
+          "label": "患者情况",
+          "description": "患者情况（ASA分级、合并症评估，如：ASA II级，否认高血压、糖尿病等慢性病史）"
+        },
+        "patientSignature": {
+          "label": "患者/家属签名",
+          "description": "患者/家属签名（留空，由患者或家属自行填写）"
+        },
+        "consentDate": {
+          "label": "签署日期",
+          "description": "签署日期（格式：____年____月____日）"
+        }
+      },
+      "endingPrompt": "确保内容专业、准确、符合麻醉知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成麻醉知情同意书。"
+    },
+    "nursingAssessment": {
+      "label": "护理评估",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份入院护理评估单。{{patientContext}}{{emrContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "admissionTime": {
+          "label": "入院时间",
+          "description": "入院时间（格式：____年____月____日 ____时____分）"
+        },
+        "vitalSigns": {
+          "label": "生命体征",
+          "description": "生命体征（T、P、R、BP、疼痛评分，如：T 36.5℃ P 78次/分 R 18次/分 BP 120/80mmHg 疼痛评分0分）"
+        },
+        "skinCondition": {
+          "label": "皮肤情况",
+          "description": "皮肤情况（完整/破损/压疮等，如：皮肤完整，无破损、无压疮，弹性可）"
+        },
+        "mobility": {
+          "label": "活动能力",
+          "description": "活动能力（自理/协助/卧床等，如：活动自如，可自主行走）"
+        },
+        "nutrition": {
+          "label": "营养状况",
+          "description": "营养状况（良好/一般/差，如：营养中等，BMI正常范围）"
+        },
+        "mentalStatus": {
+          "label": "精神状态",
+          "description": "精神状态（清醒/嗜睡/焦虑等，如：神志清楚，精神可，对答切题）"
+        },
+        "riskAssessment": {
+          "label": "风险评估",
+          "description": "风险评估（逐条评估，每条一行，前面加数字序号。①跌倒风险——低/中/高危；②压疮风险——低/中/高危；③管道滑脱风险——无/低/中/高危；④深静脉血栓风险——低/中/高危；⑤营养风险——无/轻/中/重度）"
+        },
+        "nursingDiagnosis": {
+          "label": "护理诊断",
+          "description": "护理诊断（列出主要护理问题，每条一行，前面加数字序号。如：①疼痛——与手术创伤有关；②焦虑——与担心手术预后有关；③知识缺乏——与缺乏疾病相关知识有关）"
+        }
+      },
+      "endingPrompt": "确保内容专业、准确、符合护理评估规范，评估全面准确，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成入院护理评估单。"
+    },
+    "nursingPlan": {
+      "label": "护理计划",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份护理计划。{{patientContext}}{{emrContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "nursingDiagnosis": {
+          "label": "护理诊断",
+          "description": "护理诊断（基于评估结果列出护理问题，每条一行，前面加数字序号。如：①疼痛——与手术创伤有关；②焦虑——与担心手术预后有关；③躯体移动障碍——与术后卧床有关；④知识缺乏——与缺乏疾病及术后康复知识有关）"
+        },
+        "goals": {
+          "label": "护理目标",
+          "description": "护理目标（分短期和长期目标，每条一行，前面加数字序号。①短期目标——患者疼痛缓解、焦虑减轻、生命体征平稳；②长期目标——患者掌握术后自我护理知识、能独立完成日常活动、顺利康复出院）"
+        },
+        "interventions": {
+          "label": "护理措施",
+          "description": "护理措施（具体可执行的护理操作，每条一行，前面加数字序号。①疼痛护理——评估疼痛程度、遵医嘱给予镇痛药、非药物镇痛；②体位护理——术后平卧位、膝下垫软枕减轻腹壁张力；③切口护理——观察切口渗血渗液、保持敷料干燥清洁；④阴囊护理——如疝囊进入阴囊，术后托起阴囊预防血肿；⑤活动指导——术后第1天可下床活动、避免剧烈运动；⑥饮食指导——术后6小时可进流质→半流质→普食；⑦用药护理——遵医嘱给予抗感染、止痛等药物；⑧心理护理——安慰患者、解答疑问、减轻焦虑）"
+        },
+        "evaluation": {
+          "label": "评价标准",
+          "description": "评价标准（如何评价护理效果，每条一行，前面加数字序号。①疼痛评分≤3分；②切口愈合良好，无红肿渗液；③患者能复述术后注意事项；④患者能独立完成日常活动；⑤患者满意度≥90%）"
+        },
+        "healthEducation": {
+          "label": "健康教育",
+          "description": "健康教育（患者及家属宣教内容，每条一行，前面加数字序号。①疾病知识——腹股沟疝的病因、治疗方式；②术前注意事项——禁食禁饮时间、备皮；③术后护理——切口保护、阴囊托起；④活动指导——避免剧烈运动3个月、避免增加腹压；⑤饮食指导——保持大便通畅、高蛋白饮食；⑥复查安排——术后1个月、3个月、6个月复查）"
+        },
+        "dischargePlan": {
+          "label": "出院计划",
+          "description": "出院计划（出院准备、随访安排，每条一行，前面加数字序号。①出院标准——切口愈合良好、无并发症、体温正常；②出院指导——休息、饮食、活动、切口护理；③随访安排——术后1个月、3个月、6个月门诊复查；④紧急就诊指征——切口红肿、发热、腹痛加剧等）"
+        }
+      },
+      "endingPrompt": "确保内容专业、准确、符合护理计划规范，措施具体可执行，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成护理计划。"
+    },
+    "nursingRecordSheet": {
+      "label": "护理记录单",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份护理记录单。{{patientContext}}{{emrContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "recordDate": {
+          "label": "记录日期",
+          "description": "记录日期（格式：____年____月____日）"
+        },
+        "recordTime": {
+          "label": "记录时间",
+          "description": "记录时间（格式：____时____分）"
+        },
+        "vitalSigns": {
+          "label": "生命体征",
+          "description": "生命体征（T、P、R、BP，如：T 36.5℃ P 78次/分 R 18次/分 BP 120/80mmHg）"
+        },
+        "intakeOutput": {
+          "label": "出入量",
+          "description": "出入量（入量：输液Xml、饮食等；出量：尿量Xml、引流Xml等）"
+        },
+        "medication": {
+          "label": "用药记录",
+          "description": "用药记录（药物名称、剂量、途径、时间，如：头孢替安2g ivgtt q12h）"
+        },
+        "nursingInterventions": {
+          "label": "护理措施",
+          "description": "护理措施（执行的护理操作及效果，如：协助患者下床活动，患者诉切口疼痛可耐受）"
+        },
+        "patientCondition": {
+          "label": "患者情况",
+          "description": "患者情况（主诉、症状、体征变化，如：患者神志清楚，切口敷料干燥，无渗血渗液，阴囊无肿胀）"
+        },
+        "nurseSignature": {
+          "label": "护士签名",
+          "description": "护士签名（留空，由护士自行填写）"
+        }
+      },
+      "endingPrompt": "确保内容专业、准确、符合护理记录规范，记录及时准确，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成护理记录单。"
     }
   }
 }

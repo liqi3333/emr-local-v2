@@ -2,6 +2,8 @@ const { Router } = require('express');
 const ai = require('../services/ai');
 const promptTemplates = require('../services/promptTemplates');
 const { createRateLimiter } = require('../middleware/rateLimit');
+const { findType, getRegistry } = require('../services/recordRegistry');
+const { mockGenerate } = require('../services/ai-mock');
 
 const router = Router();
 
@@ -81,10 +83,17 @@ router.post('/chat/stream', async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
-//  POST /api/emr/generate  –  Generate structured EMR (firstCourse)
+//  POST /api/records/:typeId/generate  –  Generic record generation
 // ──────────────────────────────────────────────
-router.post('/emr/generate', async (req, res) => {
+router.post('/records/:typeId/generate', async (req, res) => {
   try {
+    const { typeId } = req.params;
+    const result = findType(typeId);
+    if (!result) {
+      return res.status(404).json({ error: `Record type '${typeId}' not found` });
+    }
+
+    const { type: typeConfig, category } = result;
     const {
       disease,
       patientInfo = {},
@@ -92,105 +101,64 @@ router.post('/emr/generate', async (req, res) => {
       model,
       apiKey,
       baseUrl,
+      ...restData
     } = req.body;
 
     if (!disease) {
       return res.status(400).json({ error: 'disease is required' });
     }
 
-    const systemPrompt = promptTemplates.assembleSystemPrompt('emr', {
-      disease,
-      patientInfo,
-    });
-    const userPrompt = promptTemplates.assembleUserPrompt('emr', { disease });
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
-
-    // Try to parse the JSON response
-    let emr;
-    try {
-      // Remove potential markdown code fences
-      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
-      emr = JSON.parse(cleaned);
-      // Normalize all fields to strings (AI may return arrays for diff etc.)
-      if (emr && typeof emr === 'object') {
-        for (const [k, v] of Object.entries(emr)) {
-          if (v == null) {
-            emr[k] = '';
-          } else if (!(typeof v === 'string')) {
-            if (Array.isArray(v)) {
-              emr[k] = v.map(item => {
-                if (typeof item === 'string') return item;
-                if (typeof item === 'object' && item !== null) {
-                  return Object.values(item).join('：');
-                }
-                return String(item);
-              }).join('\n');
-            } else {
-              emr[k] = JSON.stringify(v, null, 2);
-            }
+    // Build context from contextDependencies
+    const context = { disease, patientInfo };
+    const registry = getRegistry();
+    if (typeConfig.contextDependencies && registry) {
+      for (const depId of typeConfig.contextDependencies) {
+        // Find the dependent type to get its storeKey
+        for (const cat of registry.categories) {
+          const depType = cat.types.find(t => t.id === depId);
+          if (depType) {
+            // Use storeKey to extract data from request body
+            const data = restData[depType.storeKey] || {};
+            context[depType.storeKey] = data;
+            break;
           }
         }
       }
-    } catch {
-      // If parsing fails, return the raw content so the frontend can still display it
-      return res.json({ content, emr: null, parseError: true });
     }
 
-    res.json({ content, emr });
-  } catch (err) {
-    console.error('[POST /api/emr/generate]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+    // Check if mock mode (no API key)
+    const isMockMode = !apiKey;
 
-// ──────────────────────────────────────────────
-//  POST /api/attending/generate  –  Generate attending round record
-// ──────────────────────────────────────────────
-router.post('/attending/generate', async (req, res) => {
-  try {
-    const {
-      disease,
-      patientInfo = {},
-      emrData = {},
-      provider,
-      model,
-      apiKey,
-      baseUrl,
-    } = req.body;
+    let content;
+    if (isMockMode) {
+      // Use mock generate for new types
+      content = mockGenerate(typeConfig, disease, context);
+    } else {
+      // Generate prompt and call real AI
+      const systemPrompt = promptTemplates.assembleSystemPrompt(typeConfig.templateKey, context, typeConfig);
+      const userPrompt = promptTemplates.assembleUserPrompt(typeConfig.templateKey, { disease }, typeConfig);
 
-    if (!disease) {
-      return res.status(400).json({ error: 'disease is required' });
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ];
+
+      content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
     }
 
-    const systemPrompt = promptTemplates.assembleSystemPrompt('attending', {
-      disease,
-      patientInfo,
-      emrData,
-    });
-    const userPrompt = promptTemplates.assembleUserPrompt('attending', { disease });
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
-
+    // Try to parse JSON response
     let emr;
     try {
       const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
       emr = JSON.parse(cleaned);
-      // Ensure all expected fields exist (AI may omit some)
-      if (emr && typeof emr === 'object') {
-        const defaults = { supplementHistory: '', summary: '', diagnosis: '', analysis: '', treatment: '', signed: '' };
-        emr = { ...defaults, ...emr };
+      // Build defaults from typeConfig fields
+      const defaults = {};
+      if (typeConfig.fields) {
+        for (const field of typeConfig.fields) {
+          defaults[field.key] = '';
+        }
       }
+      emr = { ...defaults, ...emr };
       // Normalize all fields to strings
       if (emr && typeof emr === 'object') {
         for (const [k, v] of Object.entries(emr)) {
@@ -212,386 +180,79 @@ router.post('/attending/generate', async (req, res) => {
         }
       }
     } catch {
-      return res.json({ content, emr: null, parseError: true });
+      return res.json({ content, emr: null, parseError: true, typeId, category: category.id });
     }
 
-    res.json({ content, emr });
+    res.json({ content, emr, typeId, category: category.id });
   } catch (err) {
-    console.error('[POST /api/attending/generate]', err.message);
+    console.error('[POST /api/records/:typeId/generate]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // ──────────────────────────────────────────────
-//  POST /api/chief/generate  –  Generate chief round record
+//  DEPRECATED: Old 7 generate endpoints
+//  Use POST /api/records/:typeId/generate instead
+//  Kept for backward compatibility during migration
 // ──────────────────────────────────────────────
-router.post('/chief/generate', async (req, res) => {
-  try {
-    const {
-      disease,
-      patientInfo = {},
-      emrData = {},
-      attendingData = {},
-      provider,
-      model,
-      apiKey,
-      baseUrl,
-    } = req.body;
-
-    if (!disease) {
-      return res.status(400).json({ error: 'disease is required' });
-    }
-
-    const systemPrompt = promptTemplates.assembleSystemPrompt('chief', {
-      disease,
-      patientInfo,
-      emrData,
-      attendingData,
-    });
-    const userPrompt = promptTemplates.assembleUserPrompt('chief', { disease });
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
-
-    let emr;
+const _DEPRECATED_MAP = {
+  '/emr/generate': 'firstCourse',
+  '/attending/generate': 'attendingRound',
+  '/chief/generate': 'chiefRound',
+  '/preop/generate': 'preop',
+  '/discussion/generate': 'discussion',
+  '/surgery/generate': 'surgery',
+  '/discharge/generate': 'discharge',
+};
+for (const [oldPath, typeId] of Object.entries(_DEPRECATED_MAP)) {
+  router.post(oldPath, async (req, res) => {
     try {
-      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
-      emr = JSON.parse(cleaned);
-      // Ensure all expected fields exist (AI may omit some)
-      if (emr && typeof emr === 'object') {
-        const defaults = { chiefSummary: '', chiefDiagnosis: '', chiefAnalysis: '', chiefTreatment: '', chiefSigned: '' };
-        emr = { ...defaults, ...emr };
-      }
-      // Normalize all fields to strings
-      if (emr && typeof emr === 'object') {
-        for (const [k, v] of Object.entries(emr)) {
-          if (v == null) {
-            emr[k] = '';
-          } else if (!(typeof v === 'string')) {
-            if (Array.isArray(v)) {
-              emr[k] = v.map(item => {
-                if (typeof item === 'string') return item;
-                if (typeof item === 'object' && item !== null) {
-                  return Object.values(item).join('：');
-                }
-                return String(item);
-              }).join('\n');
-            } else {
-              emr[k] = JSON.stringify(v, null, 2);
-            }
+      const result = findType(typeId);
+      if (!result) return res.status(404).json({ error: `Type '${typeId}' not found` });
+      const { disease, patientInfo = {}, provider, model, apiKey, baseUrl, ...restData } = req.body;
+      if (!disease) return res.status(400).json({ error: 'disease is required' });
+      const context = { disease, patientInfo };
+      const registry = getRegistry();
+      if (result.type.contextDependencies && registry) {
+        for (const depId of result.type.contextDependencies) {
+          for (const cat of registry.categories) {
+            const depType = cat.types.find(t => t.id === depId);
+            if (depType) { context[depType.storeKey] = restData[depType.storeKey] || {}; break; }
           }
         }
       }
-    } catch {
-      return res.json({ content, emr: null, parseError: true });
-    }
-
-    res.json({ content, emr });
-  } catch (err) {
-    console.error('[POST /api/chief/generate]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ──────────────────────────────────────────────
-//  POST /api/preop/generate  –  Generate preop summary (术前小结)
-// ──────────────────────────────────────────────
-router.post('/preop/generate', async (req, res) => {
-  try {
-    const {
-      disease,
-      patientInfo = {},
-      emrData = {},
-      attendingData = {},
-      provider,
-      model,
-      apiKey,
-      baseUrl,
-    } = req.body;
-
-    if (!disease) {
-      return res.status(400).json({ error: 'disease is required' });
-    }
-
-    const systemPrompt = promptTemplates.assembleSystemPrompt('preop', {
-      disease,
-      patientInfo,
-      emrData,
-      attendingData,
-    });
-    const userPrompt = promptTemplates.assembleUserPrompt('preop', { disease });
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
-
-    let emr;
-    try {
-      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
-      emr = JSON.parse(cleaned);
-      if (emr && typeof emr === 'object') {
-        const defaults = { preopDiagnosis: '', preopIndication: '', preopPlan: '', preopPreparation: '', preopRisk: '', preopSigned: '' };
-        emr = { ...defaults, ...emr };
+      const isMockMode = !apiKey;
+      let content;
+      if (isMockMode) {
+        content = mockGenerate(result.type, disease, context);
+      } else {
+        const systemPrompt = promptTemplates.assembleSystemPrompt(result.type.templateKey, context, result.type);
+        const userPrompt = promptTemplates.assembleUserPrompt(result.type.templateKey, { disease }, result.type);
+        content = await ai.callAI(provider, model, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }], apiKey, baseUrl);
       }
-      if (emr && typeof emr === 'object') {
-        for (const [k, v] of Object.entries(emr)) {
-          if (v == null) {
-            emr[k] = '';
-          } else if (!(typeof v === 'string')) {
-            if (Array.isArray(v)) {
-              emr[k] = v.map(item => {
-                if (typeof item === 'string') return item;
-                if (typeof item === 'object' && item !== null) {
-                  return Object.values(item).join('：');
-                }
-                return String(item);
-              }).join('\n');
-            } else {
-              emr[k] = JSON.stringify(v, null, 2);
+      let emr;
+      try {
+        const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
+        emr = JSON.parse(cleaned);
+        const defaults = {};
+        if (result.type.fields) { for (const f of result.type.fields) defaults[f.key] = ''; }
+        emr = { ...defaults, ...emr };
+        if (emr && typeof emr === 'object') {
+          for (const [k, v] of Object.entries(emr)) {
+            if (v == null) emr[k] = '';
+            else if (typeof v !== 'string') {
+              emr[k] = Array.isArray(v) ? v.map(i => typeof i === 'string' ? i : JSON.stringify(i)).join('\n') : JSON.stringify(v, null, 2);
             }
           }
         }
-      }
-    } catch {
-      return res.json({ content, emr: null, parseError: true });
+      } catch { return res.json({ content, emr: null, parseError: true }); }
+      res.json({ content, emr });
+    } catch (err) {
+      console.error(`[DEPRECATED ${oldPath}]`, err.message);
+      res.status(500).json({ error: err.message });
     }
-
-    res.json({ content, emr });
-  } catch (err) {
-    console.error('[POST /api/preop/generate]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ──────────────────────────────────────────────
-//  POST /api/discussion/generate  –  Generate preop discussion (术前讨论)
-// ──────────────────────────────────────────────
-router.post('/discussion/generate', async (req, res) => {
-  try {
-    const {
-      disease,
-      patientInfo = {},
-      emrData = {},
-      attendingData = {},
-      preopData = {},
-      provider,
-      model,
-      apiKey,
-      baseUrl,
-    } = req.body;
-
-    if (!disease) {
-      return res.status(400).json({ error: 'disease is required' });
-    }
-
-    const systemPrompt = promptTemplates.assembleSystemPrompt('discussion', {
-      disease,
-      patientInfo,
-      emrData,
-      attendingData,
-      preopData,
-    });
-    const userPrompt = promptTemplates.assembleUserPrompt('discussion', { disease });
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
-
-    let emr;
-    try {
-      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
-      emr = JSON.parse(cleaned);
-      if (emr && typeof emr === 'object') {
-        const defaults = { discussionParticipants: '', discussionCaseSummary: '', discussionDiagnosis: '', discussionContent: '', discussionConclusion: '', discussionSigned: '' };
-        emr = { ...defaults, ...emr };
-      }
-      if (emr && typeof emr === 'object') {
-        for (const [k, v] of Object.entries(emr)) {
-          if (v == null) {
-            emr[k] = '';
-          } else if (!(typeof v === 'string')) {
-            if (Array.isArray(v)) {
-              emr[k] = v.map(item => {
-                if (typeof item === 'string') return item;
-                if (typeof item === 'object' && item !== null) {
-                  return Object.values(item).join('：');
-                }
-                return String(item);
-              }).join('\n');
-            } else {
-              emr[k] = JSON.stringify(v, null, 2);
-            }
-          }
-        }
-      }
-    } catch {
-      return res.json({ content, emr: null, parseError: true });
-    }
-
-    res.json({ content, emr });
-  } catch (err) {
-    console.error('[POST /api/discussion/generate]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ──────────────────────────────────────────────
-//  POST /api/surgery/generate  –  Generate surgery record (手术记录)
-// ──────────────────────────────────────────────
-router.post('/surgery/generate', async (req, res) => {
-  try {
-    const {
-      disease,
-      patientInfo = {},
-      emrData = {},
-      preopData = {},
-      provider,
-      model,
-      apiKey,
-      baseUrl,
-    } = req.body;
-
-    if (!disease) {
-      return res.status(400).json({ error: 'disease is required' });
-    }
-
-    const systemPrompt = promptTemplates.assembleSystemPrompt('surgery', {
-      disease,
-      patientInfo,
-      emrData,
-      preopData,
-    });
-    const userPrompt = promptTemplates.assembleUserPrompt('surgery', { disease });
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
-
-    let emr;
-    try {
-      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
-      emr = JSON.parse(cleaned);
-      if (emr && typeof emr === 'object') {
-        const defaults = { surgeryName: '', surgerySurgeon: '', surgeryAssistant: '', surgeryAnesthesia: '', surgeryProcess: '', surgeryFindings: '', surgerySigned: '' };
-        emr = { ...defaults, ...emr };
-      }
-      if (emr && typeof emr === 'object') {
-        for (const [k, v] of Object.entries(emr)) {
-          if (v == null) {
-            emr[k] = '';
-          } else if (!(typeof v === 'string')) {
-            if (Array.isArray(v)) {
-              emr[k] = v.map(item => {
-                if (typeof item === 'string') return item;
-                if (typeof item === 'object' && item !== null) {
-                  return Object.values(item).join('：');
-                }
-                return String(item);
-              }).join('\n');
-            } else {
-              emr[k] = JSON.stringify(v, null, 2);
-            }
-          }
-        }
-      }
-    } catch {
-      return res.json({ content, emr: null, parseError: true });
-    }
-
-    res.json({ content, emr });
-  } catch (err) {
-    console.error('[POST /api/surgery/generate]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ──────────────────────────────────────────────
-//  POST /api/discharge/generate  –  Generate discharge summary (出院小结)
-// ──────────────────────────────────────────────
-router.post('/discharge/generate', async (req, res) => {
-  try {
-    const {
-      disease,
-      patientInfo = {},
-      emrData = {},
-      preopData = {},
-      surgeryData = {},
-      provider,
-      model,
-      apiKey,
-      baseUrl,
-    } = req.body;
-
-    if (!disease) {
-      return res.status(400).json({ error: 'disease is required' });
-    }
-
-    const systemPrompt = promptTemplates.assembleSystemPrompt('discharge', {
-      disease,
-      patientInfo,
-      emrData,
-      preopData,
-      surgeryData,
-    });
-    const userPrompt = promptTemplates.assembleUserPrompt('discharge', { disease });
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
-
-    let emr;
-    try {
-      const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
-      emr = JSON.parse(cleaned);
-      if (emr && typeof emr === 'object') {
-        const defaults = { dischargeAdmissionDate: '', dischargeDate: '', dischargeDiagnosis: '', dischargeTreatment: '', dischargeOutcome: '', dischargeAdvice: '', dischargeSigned: '' };
-        emr = { ...defaults, ...emr };
-      }
-      if (emr && typeof emr === 'object') {
-        for (const [k, v] of Object.entries(emr)) {
-          if (v == null) {
-            emr[k] = '';
-          } else if (!(typeof v === 'string')) {
-            if (Array.isArray(v)) {
-              emr[k] = v.map(item => {
-                if (typeof item === 'string') return item;
-                if (typeof item === 'object' && item !== null) {
-                  return Object.values(item).join('：');
-                }
-                return String(item);
-              }).join('\n');
-            } else {
-              emr[k] = JSON.stringify(v, null, 2);
-            }
-          }
-        }
-      }
-    } catch {
-      return res.json({ content, emr: null, parseError: true });
-    }
-
-    res.json({ content, emr });
-  } catch (err) {
-    console.error('[POST /api/discharge/generate]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+  });
+}
 
 // ──────────────────────────────────────────────
 //  POST /api/emr/generate/stream  –  Streaming EMR generation (SSE)

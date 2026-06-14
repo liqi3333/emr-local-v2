@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>病历类型管理 - 电子病历系统 v2</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="record-types-page">
+
+  <div id="recordTypeRoot"></div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script type="module">
+    import { RecordTypeManager } from '/js/components/RecordTypeManager.js';
+
+    const root = document.getElementById('recordTypeRoot');
+    const manager = new RecordTypeManager(root);
+    await manager.render();
+  </script>
+</body>
+</html>

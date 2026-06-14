@@ -122,51 +122,19 @@ export class ChatArea {
       .filter((m) => m.content)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    // Build system context: disease + current EMR data based on active tab
+    // Build system context: disease + current EMR data based on active type
     if (store.state.currentDisease) {
       let systemContent = `当前患者疾病：${store.state.currentDisease}。`;
 
-      const activeTab = store.state.activeTab || 'firstCourse';
-      let currentData = null;
-      let tabLabel = '';
-      let fieldDesc = '';
+      const activeType = store.state.activeType || 'firstCourse';
+      const typeConfig = store.getTypeConfig(activeType);
+      const tabLabel = typeConfig?.label || activeType;
+      const currentData = store.getActiveTypeData();
 
-      switch (activeTab) {
-        case 'firstCourse':
-          currentData = store.state.emrData;
-          tabLabel = '首次病程录';
-          fieldDesc = '字段说明：\n- chief: 主诉\n- hpi: 现病史\n- past: 既往史\n- exam: 体格检查\n- lab: 辅助检查\n- diag: 初步诊断\n- workup: 拟诊讨论\n- diff: 鉴别诊断\n- plan: 治疗计划';
-          break;
-        case 'attendingRound':
-          currentData = store.state.attendingData;
-          tabLabel = '主治医师首次查房';
-          fieldDesc = '字段说明：\n- supplementHistory: 补充病史\n- summary: 病情摘要\n- diagnosis: 诊断\n- analysis: 病情分析\n- treatment: 诊疗计划\n- signed: 医师签名';
-          break;
-        case 'chiefRound':
-          currentData = store.state.chiefData;
-          tabLabel = '主任医师首次查房';
-          fieldDesc = '字段说明：\n- chiefSummary: 病情摘要\n- chiefDiagnosis: 诊断\n- chiefAnalysis: 病情分析\n- chiefTreatment: 诊疗计划\n- chiefNotes: 主任指示\n- chiefSigned: 医师签名';
-          break;
-        case 'preop':
-          currentData = store.state.preopData;
-          tabLabel = '术前小结';
-          fieldDesc = '字段说明：\n- preopDiagnosis: 术前诊断\n- preopIndication: 手术指征\n- preopPlan: 手术方案\n- preopPreparation: 术前准备\n- preopRisk: 风险评估\n- preopSigned: 医师签名';
-          break;
-        case 'discussion':
-          currentData = store.state.discussionData;
-          tabLabel = '术前讨论';
-          fieldDesc = '字段说明：\n- discussionParticipants: 参加人员\n- discussionCaseSummary: 病例摘要\n- discussionDiagnosis: 诊断\n- discussionContent: 讨论内容\n- discussionConclusion: 讨论结论\n- discussionSigned: 记录者签名';
-          break;
-        case 'surgery':
-          currentData = store.state.surgeryData;
-          tabLabel = '手术记录';
-          fieldDesc = '字段说明：\n- surgeryName: 手术名称\n- surgerySurgeon: 手术者\n- surgeryAssistant: 助手\n- surgeryAnesthesia: 麻醉方式\n- surgeryProcess: 手术经过\n- surgeryFindings: 术中发现\n- surgerySigned: 手术者签名';
-          break;
-        case 'discharge':
-          currentData = store.state.dischargeData;
-          tabLabel = '出院小结';
-          fieldDesc = '字段说明：\n- dischargeAdmissionDate: 入院日期\n- dischargeDate: 出院日期\n- dischargeDiagnosis: 出院诊断\n- dischargeTreatment: 治疗经过\n- dischargeOutcome: 出院情况\n- dischargeAdvice: 出院医嘱\n- dischargeSigned: 主治医师签名';
-          break;
+      // Build field description from registry
+      let fieldDesc = '';
+      if (typeConfig?.fields) {
+        fieldDesc = '字段说明：\n' + typeConfig.fields.filter(f => f.enabled !== false).map(f => `- ${f.key}: ${f.label}`).join('\n');
       }
 
       if (currentData) {
@@ -249,20 +217,11 @@ export class ChatArea {
       } catch { return; }
     }
 
-    // 3. Route parsed data to the correct store state based on active tab
+    // 3. Route parsed data to the correct store state based on active type
     if (!parsed) return;
-    const activeTab = store.state.activeTab || 'firstCourse';
-    const stateKey = {
-      firstCourse: 'emrData',
-      attendingRound: 'attendingData',
-      chiefRound: 'chiefData',
-      preop: 'preopData',
-      discussion: 'discussionData',
-      surgery: 'surgeryData',
-      discharge: 'dischargeData',
-    }[activeTab] || 'emrData';
-    const current = store.state[stateKey] || {};
-    store.setState({ [stateKey]: { ...current, ...parsed } });
+    const activeType = store.state.activeType || 'firstCourse';
+    const current = store.getActiveTypeData() || {};
+    store.setTypeData(activeType, { ...current, ...parsed });
     store.toast('info', '病历已更新');
   }
 

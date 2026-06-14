@@ -1972,6 +1972,133 @@ const DISCHARGE_TEMPLATES = {
   },
 };
 
+// ═══════════════════════════════════════════════════
+//  同意书模板 (Consent Form Templates)
+// ═══════════════════════════════════════════════════
+
+const CONSENT_TEMPLATES = {
+  '腹股沟疝': {
+    surgeryConsent: {
+      surgeryName: `右侧腹股沟疝无张力修补术（Lichtenstein术）`,
+      surgeryIndication: `1. 患者发现右侧腹股沟区可复性肿物X年，诊断明确
+2. 肿物逐渐增大，伴局部坠胀不适及牵涉痛，影响日常生活
+3. 腹股沟区B超提示右侧腹股沟斜疝
+4. 具有手术指征，无明显手术禁忌症`,
+      surgeryRisks: `1. 出血：术中术后切口出血、阴囊血肿等可能
+2. 感染：切口感染、深部感染、补片感染等可能
+3. 损伤周围组织：精索、输精管、肠管等损伤可能
+4. 麻醉意外：详见麻醉知情同意书
+5. 补片相关：补片排斥反应、移位、慢性疼痛等可能
+6. 复发：术后疝复发可能，复发率约1-5%
+7. 其他：阴囊血肿、睾丸萎缩、肠粘连、肠梗阻等可能`,
+      alternatives: `1. 保守治疗：疝带压迫治疗，适用于暂不耐受手术者，但无法根治，可能逐渐加重
+2. 传统疝修补术（Bassini法）：利用自身组织修补，复发率较高（约10-15%）
+3. 腹腔镜疝修补术：微创手术，适用于双侧疝或复发疝，费用较高`,
+      patientSignature: ``,
+      consentDate: `____年____月____日`,
+    },
+    bloodTransfusionConsent: {
+      bloodType: `待查`,
+      transfusionReason: `术中可能出现出血，需输血补充血容量`,
+      bloodProducts: `1. 悬浮红细胞X单位
+2. 新鲜冰冻血浆X毫升`,
+      transfusionRisks: `1. 过敏反应：皮疹、呼吸困难、过敏性休克等可能
+2. 溶血反应：发热、寒战、血红蛋白尿等可能
+3. 感染风险：肝炎、HIV等血源性传播疾病（极低概率）
+4. 循环超负荷：心衰、肺水肿等可能
+5. 其他：输血相关急性肺损伤等可能`,
+      alternatives: `1. 自体输血：术前预存自体血
+2. 血液稀释法：术中血液稀释
+3. 止血药物应用：减少出血`,
+      patientSignature: ``,
+      consentDate: `____年____月____日`,
+    },
+    anesthesiaConsent: {
+      anesthesiaType: `椎管内麻醉（腰硬联合麻醉）`,
+      surgeryName: `右侧腹股沟疝无张力修补术（Lichtenstein术）`,
+      anesthesiaRisks: `1. 呼吸系统：呼吸抑制、误吸、喉痉挛、支气管痉挛等可能
+2. 心血管系统：低血压、心律失常、心跳骤停等可能
+3. 神经系统：头痛、神经损伤、硬膜外血肿等可能
+4. 消化系统：恶心、呕吐等可能
+5. 过敏反应：局麻药过敏、肌松药过敏等可能
+6. 其他：高热、恶性高热等可能`,
+      alternatives: `1. 全身麻醉：适用于椎管内麻醉禁忌者
+2. 局部浸润麻醉：适用于简单短小手术
+3. 神经阻滞麻醉：适用于特定手术区域`,
+      patientCondition: `ASA II级，否认高血压、糖尿病等慢性病史`,
+      patientSignature: ``,
+      consentDate: `____年____月____日`,
+    },
+  },
+};
+
+// ═══════════════════════════════════════════════════
+//  护理记录模板 (Nursing Record Templates)
+// ═══════════════════════════════════════════════════
+
+const NURSING_TEMPLATES = {
+  '腹股沟疝': {
+    nursingAssessment: {
+      admissionTime: `____年____月____日 ____时____分`,
+      vitalSigns: `T 36.5℃  P 78次/分  R 18次/分  BP 120/80mmHg  疼痛评分0分`,
+      skinCondition: `皮肤完整，无破损、无压疮，弹性可`,
+      mobility: `活动自如，可自主行走`,
+      nutrition: `营养中等，BMI正常范围`,
+      mentalStatus: `神志清楚，精神可，对答切题`,
+      riskAssessment: `1. 跌倒风险：低危
+2. 压疮风险：低危
+3. 管道滑脱风险：无
+4. 深静脉血栓风险：低危
+5. 营养风险：无`,
+      nursingDiagnosis: `1. 疼痛——与腹股沟疝嵌顿或术后创伤有关
+2. 焦虑——与担心手术预后有关
+3. 知识缺乏——与缺乏疾病相关知识有关`,
+    },
+    nursingPlan: {
+      nursingDiagnosis: `1. 疼痛——与腹股沟疝嵌顿或术后创伤有关
+2. 焦虑——与担心手术预后有关
+3. 躯体移动障碍——与术后卧床有关
+4. 知识缺乏——与缺乏疾病及术后康复知识有关`,
+      goals: `1. 短期目标：患者疼痛缓解、焦虑减轻、生命体征平稳
+2. 长期目标：患者掌握术后自我护理知识、能独立完成日常活动、顺利康复出院`,
+      interventions: `1. 疼痛护理：评估疼痛程度、遵医嘱给予镇痛药、非药物镇痛
+2. 体位护理：术后平卧位、膝下垫软枕减轻腹壁张力
+3. 切口护理：观察切口渗血渗液、保持敷料干燥清洁
+4. 阴囊护理：如疝囊进入阴囊，术后托起阴囊预防血肿
+5. 活动指导：术后第1天可下床活动、避免剧烈运动
+6. 饮食指导：术后6小时可进流质→半流质→普食
+7. 用药护理：遵医嘱给予抗感染、止痛等药物
+8. 心理护理：安慰患者、解答疑问、减轻焦虑`,
+      evaluation: `1. 疼痛评分≤3分
+2. 切口愈合良好，无红肿渗液
+3. 患者能复述术后注意事项
+4. 患者能独立完成日常活动
+5. 患者满意度≥90%`,
+      healthEducation: `1. 疾病知识：腹股沟疝的病因、治疗方式
+2. 术前注意事项：禁食禁饮时间、备皮
+3. 术后护理：切口保护、阴囊托起
+4. 活动指导：避免剧烈运动3个月、避免增加腹压
+5. 饮食指导：保持大便通畅、高蛋白饮食
+6. 复查安排：术后1个月、3个月、6个月复查`,
+      dischargePlan: `1. 出院标准：切口愈合良好、无并发症、体温正常
+2. 出院指导：休息、饮食、活动、切口护理
+3. 随访安排：术后1个月、3个月、6个月门诊复查
+4. 紧急就诊指征：切口红肿、发热、腹痛加剧等`,
+    },
+    nursingRecordSheet: {
+      recordDate: `____年____月____日`,
+      recordTime: `____时____分`,
+      vitalSigns: `T 36.5℃  P 78次/分  R 18次/分  BP 120/80mmHg`,
+      intakeOutput: `入量：输液Xml、饮食Xml；出量：尿量Xml`,
+      medication: `头孢替安2g ivgtt q12h
+布洛芬0.4g po prn`,
+      nursingInterventions: `协助患者下床活动，患者诉切口疼痛可耐受。指导患者避免剧烈运动，保持大便通畅。`,
+      patientCondition: `患者神志清楚，精神可，切口敷料干燥，无渗血渗液，阴囊无肿胀，生命体征平稳。`,
+      nurseSignature: ``,
+    },
+  },
+};
+
 /**
  * 根据疾病名称获取首次病程录模板
  */
@@ -2022,6 +2149,28 @@ function getDischargeTemplate(diseaseName) {
 }
 
 /**
+ * 根据模板类型和疾病名称获取同意书模板
+ * @param {string} type - templateKey (surgeryConsent/bloodTransfusionConsent/anesthesiaConsent)
+ * @param {string} diseaseName - 疾病名称
+ */
+function getConsentTemplate(type, diseaseName) {
+  const diseaseTemplates = CONSENT_TEMPLATES[diseaseName] || CONSENT_TEMPLATES[ALIASES[diseaseName]];
+  if (!diseaseTemplates) return null;
+  return diseaseTemplates[type] || null;
+}
+
+/**
+ * 根据模板类型和疾病名称获取护理记录模板
+ * @param {string} type - templateKey (nursingAssessment/nursingPlan/nursingRecordSheet)
+ * @param {string} diseaseName - 疾病名称
+ */
+function getNursingTemplate(type, diseaseName) {
+  const diseaseTemplates = NURSING_TEMPLATES[diseaseName] || NURSING_TEMPLATES[ALIASES[diseaseName]];
+  if (!diseaseTemplates) return null;
+  return diseaseTemplates[type] || null;
+}
+
+/**
  * 获取所有可用模板的疾病名称列表
  */
 function getTemplateDiseases() {
@@ -2031,8 +2180,10 @@ function getTemplateDiseases() {
 module.exports = { 
   getTemplate, getAttendingTemplate, getChiefTemplate, getPreopTemplate,
   getDiscussionTemplate, getSurgeryTemplate, getDischargeTemplate,
+  getConsentTemplate, getNursingTemplate,
   getTemplateDiseases, 
   TEMPLATES, ATTENDING_TEMPLATES, CHIEF_TEMPLATES, PREOP_TEMPLATES,
-  DISCUSSION_TEMPLATES, SURGERY_TEMPLATES, DISCHARGE_TEMPLATES
+  DISCUSSION_TEMPLATES, SURGERY_TEMPLATES, DISCHARGE_TEMPLATES,
+  CONSENT_TEMPLATES, NURSING_TEMPLATES
 };
 

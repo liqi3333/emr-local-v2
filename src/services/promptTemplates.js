@@ -366,18 +366,22 @@ function assembleFieldBlock(typeConfig) {
   return JSON.stringify(fieldObj, null, 2);
 }
 
-function assembleSystemPrompt(type, context) {
-  const activeName = getActiveTemplateName();
-  const merged = getMergedTemplate(activeName);
-  const typeConfig = merged.templates[type];
-  if (!typeConfig) {
-    throw new Error(`未知的病历类型: ${type}`);
-  }
+function buildFromRegistryFields(registryTypeConfig, context) {
+  const disease = context.disease || '';
+  const patientInfo = context.patientInfo || {};
 
-  const rolePrompt = replacePlaceholders(typeConfig.rolePrompt, context);
-  const outputFormat = replacePlaceholders(typeConfig.outputFormat, context);
-  const endingPrompt = replacePlaceholders(typeConfig.endingPrompt, context);
-  const fieldBlock = assembleFieldBlock(typeConfig);
+  const rolePrompt = `你是一位经验丰富的普外科主治医师。请根据疾病"${disease}"生成一份结构化${registryTypeConfig.label}。${buildContextString('患者基本信息', patientInfo)}`;
+
+  const outputFormat = '以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：';
+
+  const fieldObj = {};
+  for (const field of registryTypeConfig.fields || []) {
+    if (field.enabled === false) continue;
+    fieldObj[field.key] = field.description;
+  }
+  const fieldBlock = JSON.stringify(fieldObj, null, 2);
+
+  const endingPrompt = '确保内容专业、准确、符合临床规范，所有字段互相对应、逻辑自洽。';
 
   const parts = [
     rolePrompt,
@@ -392,14 +396,57 @@ function assembleSystemPrompt(type, context) {
   return parts.join('\n').trim();
 }
 
-function assembleUserPrompt(type, context) {
+function assembleSystemPrompt(type, context, registryTypeConfig) {
   const activeName = getActiveTemplateName();
   const merged = getMergedTemplate(activeName);
   const typeConfig = merged.templates[type];
-  if (!typeConfig) {
-    throw new Error(`未知的病历类型: ${type}`);
+
+  // Layer 1: Use existing template from defaultPrompts.json
+  if (typeConfig) {
+    const rolePrompt = replacePlaceholders(typeConfig.rolePrompt, context);
+    const outputFormat = replacePlaceholders(typeConfig.outputFormat, context);
+    const endingPrompt = replacePlaceholders(typeConfig.endingPrompt, context);
+    const fieldBlock = assembleFieldBlock(typeConfig);
+
+    const parts = [
+      rolePrompt,
+      '',
+      outputFormat,
+      '',
+      fieldBlock,
+      '',
+      endingPrompt,
+    ];
+
+    return parts.join('\n').trim();
   }
-  return replacePlaceholders(typeConfig.userPrompt, context);
+
+  // Layer 2: Auto-generate from registry fields
+  if (registryTypeConfig) {
+    return buildFromRegistryFields(registryTypeConfig, context);
+  }
+
+  // Layer 3: No template found
+  throw new Error(`未知的病历类型: ${type}`);
+}
+
+function assembleUserPrompt(type, context, registryTypeConfig) {
+  const activeName = getActiveTemplateName();
+  const merged = getMergedTemplate(activeName);
+  const typeConfig = merged.templates[type];
+
+  // Layer 1: Use existing template
+  if (typeConfig) {
+    return replacePlaceholders(typeConfig.userPrompt, context);
+  }
+
+  // Layer 2: Auto-generate user prompt
+  if (registryTypeConfig) {
+    return `请为"${context.disease || ''}"生成${registryTypeConfig.label}。`;
+  }
+
+  // Layer 3: No template found
+  throw new Error(`未知的病历类型: ${type}`);
 }
 
 // ──────────────────────────────────────────────

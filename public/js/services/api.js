@@ -487,6 +487,41 @@ export async function getDischargeTemplate(disease) {
 //  Prompt Template Management
 // ──────────────────────────────────────────────
 
+/**
+ * Generate record for any type via the unified backend endpoint.
+ * Works for both old 7 types and new registry-driven types.
+ *
+ * @param {string} typeId - e.g. 'firstCourse', 'informedConsent'
+ * @param {object} opts
+ * @param {string} opts.disease
+ * @param {object} [opts.patientInfo]
+ * @param {object} [opts.contextData] - dependent data keyed by storeKey (e.g. { emrData: {...} })
+ * @param {object} [overrides] - provider/model/apiKey/baseUrl overrides
+ * @returns {Promise<{ emr: object|null, content: string, typeId: string, category: string, parseError?: boolean }>}
+ */
+export async function generateRecord(typeId, { disease, patientInfo = {}, contextData = {} } = {}, overrides = {}) {
+  const cfg = getModelConfig();
+  const body = {
+    disease,
+    patientInfo,
+    ...contextData,
+    provider: overrides.provider || cfg?.provider,
+    model: overrides.model || cfg?.model,
+    apiKey: overrides.apiKey || cfg?.apiKey,
+    baseUrl: overrides.baseUrl || cfg?.baseUrl,
+  };
+  const res = await fetchWithTimeout(`${BASE}/records/${encodeURIComponent(typeId)}/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function listPromptTemplates() {
   const res = await fetchWithTimeout(`${BASE}/prompts/templates`, {}, TIMEOUT);
   if (!res.ok) {

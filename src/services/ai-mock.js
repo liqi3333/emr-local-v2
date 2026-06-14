@@ -7,9 +7,16 @@
  * Exports:
  *   mockCallAI(messages) → string
  *   mockStreamAI(messages) → AsyncGenerator<string>
+ *   mockGenerate(typeConfig, disease, context) → string
  */
 
-const { getTemplate, getAttendingTemplate, getChiefTemplate, getPreopTemplate, getDiscussionTemplate, getSurgeryTemplate, getDischargeTemplate } = require("../data/templates");
+const { getTemplate, getAttendingTemplate, getChiefTemplate, getPreopTemplate, getDiscussionTemplate, getSurgeryTemplate, getDischargeTemplate, getConsentTemplate, getNursingTemplate } = require("../data/templates");
+
+// ──────────────────────────────────────────────
+//  Strategy Registry
+// ──────────────────────────────────────────────
+
+const MOCK_STRATEGIES = new Map();
 
 /**
  * Extract disease name from prompt text.
@@ -192,7 +199,173 @@ function mockDischarge(text) {
 }
 
 /**
- * Mock non-streaming AI call.
+ * Generate mock surgery consent response.
+ */
+function mockSurgeryConsent(text) {
+  const disease = extractDisease(text);
+  const template = getConsentTemplate('surgeryConsent', disease);
+  if (template) return JSON.stringify(template);
+
+  return JSON.stringify({
+    surgeryName: `${disease}手术`,
+    surgeryIndication: `1. 患者诊断明确，具有手术指征\n2. 无明显手术禁忌症`,
+    surgeryRisks: `1. 出血\n2. 感染\n3. 损伤周围组织\n4. 麻醉意外\n5. 复发`,
+    alternatives: `1. 保守治疗：疝带压迫\n2. 传统疝修补术\n3. 腹腔镜疝修补术`,
+    patientSignature: "",
+    consentDate: "____年____月____日",
+  });
+}
+
+/**
+ * Generate mock blood transfusion consent response.
+ */
+function mockBloodTransfusionConsent(text) {
+  const disease = extractDisease(text);
+  const template = getConsentTemplate('bloodTransfusionConsent', disease);
+  if (template) return JSON.stringify(template);
+
+  return JSON.stringify({
+    bloodType: "待查",
+    transfusionReason: `术中可能出现出血，需输血补充血容量`,
+    bloodProducts: `1. 悬浮红细胞X单位`,
+    transfusionRisks: `1. 过敏反应\n2. 溶血反应\n3. 感染风险\n4. 循环超负荷`,
+    alternatives: `1. 自体输血\n2. 止血药物应用`,
+    patientSignature: "",
+    consentDate: "____年____月____日",
+  });
+}
+
+/**
+ * Generate mock anesthesia consent response.
+ */
+function mockAnesthesiaConsent(text) {
+  const disease = extractDisease(text);
+  const template = getConsentTemplate('anesthesiaConsent', disease);
+  if (template) return JSON.stringify(template);
+
+  return JSON.stringify({
+    anesthesiaType: "椎管内麻醉",
+    surgeryName: `${disease}手术`,
+    anesthesiaRisks: `1. 呼吸系统风险\n2. 心血管系统风险\n3. 神经系统风险\n4. 消化系统风险\n5. 过敏反应`,
+    alternatives: `1. 全身麻醉\n2. 局部浸润麻醉`,
+    patientCondition: "ASA II级",
+    patientSignature: "",
+    consentDate: "____年____月____日",
+  });
+}
+
+/**
+ * Generate mock nursing assessment response.
+ */
+function mockNursingAssessment(text) {
+  const disease = extractDisease(text);
+  const template = getNursingTemplate('nursingAssessment', disease);
+  if (template) return JSON.stringify(template);
+
+  return JSON.stringify({
+    admissionTime: "____年____月____日 ____时____分",
+    vitalSigns: "T 36.5℃ P 78次/分 R 18次/分 BP 120/80mmHg 疼痛评分0分",
+    skinCondition: "皮肤完整，无破损",
+    mobility: "活动自如",
+    nutrition: "营养中等",
+    mentalStatus: "神志清楚，精神可",
+    riskAssessment: "1. 跌倒风险：低危\n2. 压疮风险：低危\n3. 管道滑脱风险：无",
+    nursingDiagnosis: `1. 疼痛——与疾病有关\n2. 焦虑——与担心预后有关`,
+  });
+}
+
+/**
+ * Generate mock nursing plan response.
+ */
+function mockNursingPlan(text) {
+  const disease = extractDisease(text);
+  const template = getNursingTemplate('nursingPlan', disease);
+  if (template) return JSON.stringify(template);
+
+  return JSON.stringify({
+    nursingDiagnosis: `1. 疼痛——与疾病有关\n2. 焦虑——与担心预后有关`,
+    goals: `1. 短期目标：疼痛缓解、焦虑减轻\n2. 长期目标：康复出院`,
+    interventions: `1. 疼痛护理\n2. 心理护理\n3. 健康教育`,
+    evaluation: `1. 疼痛评分≤3分\n2. 患者满意度≥90%`,
+    healthEducation: `1. 疾病知识\n2. 术后注意事项\n3. 复查安排`,
+    dischargePlan: `1. 出院标准\n2. 出院指导\n3. 随访安排`,
+  });
+}
+
+/**
+ * Generate mock nursing record sheet response.
+ */
+function mockNursingRecordSheet(text) {
+  const disease = extractDisease(text);
+  const template = getNursingTemplate('nursingRecordSheet', disease);
+  if (template) return JSON.stringify(template);
+
+  return JSON.stringify({
+    recordDate: "____年____月____日",
+    recordTime: "____时____分",
+    vitalSigns: "T 36.5℃ P 78次/分 R 18次/分 BP 120/80mmHg",
+    intakeOutput: "入量：输液Xml；出量：尿量Xml",
+    medication: "遵医嘱用药",
+    nursingInterventions: "协助患者活动，观察病情变化",
+    patientCondition: "患者一般情况可，生命体征平稳",
+    nurseSignature: "",
+  });
+}
+
+// Register old mock functions as strategies
+MOCK_STRATEGIES.set('emr', mockFirstCourse);
+MOCK_STRATEGIES.set('attending', mockAttendingRound);
+MOCK_STRATEGIES.set('chief', mockChiefRound);
+MOCK_STRATEGIES.set('preop', mockPreop);
+MOCK_STRATEGIES.set('discussion', mockDiscussion);
+MOCK_STRATEGIES.set('surgery', mockSurgery);
+MOCK_STRATEGIES.set('discharge', mockDischarge);
+MOCK_STRATEGIES.set('surgeryConsent', mockSurgeryConsent);
+MOCK_STRATEGIES.set('bloodTransfusionConsent', mockBloodTransfusionConsent);
+MOCK_STRATEGIES.set('anesthesiaConsent', mockAnesthesiaConsent);
+MOCK_STRATEGIES.set('nursingAssessment', mockNursingAssessment);
+MOCK_STRATEGIES.set('nursingPlan', mockNursingPlan);
+MOCK_STRATEGIES.set('nursingRecordSheet', mockNursingRecordSheet);
+
+/**
+ * Build generic mock response from registry fields.
+ * @param {Array} fields - Array of { key, label, description }
+ * @param {string} disease - Disease name
+ * @returns {string} JSON string
+ */
+function buildGenericMock(fields, disease) {
+  const result = {};
+  for (const field of fields || []) {
+    if (field.enabled === false) continue;
+    result[field.key] = `【${field.label}】${disease}患者相关${field.label}内容（模拟）`;
+  }
+  return JSON.stringify(result);
+}
+
+/**
+ * Mock generate by typeConfig — unified entry point for new generic endpoint.
+ * @param {Object} typeConfig - Registry type config
+ * @param {string} disease - Disease name
+ * @param {Object} context - Additional context
+ * @returns {string} JSON string
+ */
+function mockGenerate(typeConfig, disease, context) {
+  const templateKey = typeConfig.templateKey;
+
+  // Layer 1: Use registered strategy (old 7 types)
+  const strategy = MOCK_STRATEGIES.get(templateKey);
+  if (strategy) {
+    // Build a synthetic prompt for the strategy to parse
+    const syntheticText = `请为"${disease}"生成${typeConfig.label}。`;
+    return strategy(syntheticText);
+  }
+
+  // Layer 2: Generic mock for new types
+  return buildGenericMock(typeConfig.fields, disease);
+}
+
+/**
+ * Mock non-streaming AI call (backward compatible).
  * @param {Array<{role: string, content: string}>} messages
  * @returns {string}
  */
@@ -249,4 +422,4 @@ async function* mockStreamAI(messages) {
   }
 }
 
-module.exports = { mockCallAI, mockStreamAI };
+module.exports = { mockCallAI, mockStreamAI, mockGenerate, buildGenericMock, MOCK_STRATEGIES };

@@ -27,14 +27,22 @@ lsof -ti:8000 | xargs kill -9
 
 | 文件 | 作用 |
 |------|------|
+| `src/data/recordRegistry.js` | DEFAULT_REGISTRY 常量。3 个分类、13 个类型，所有字段定义。 |
+| `src/services/recordRegistry.js` | Registry 服务层。getRegistry/saveRegistry/findType/validateRegistry/ensureDefaultRegistry/migrateLegacyTypes。 |
 | `src/services/database.js` | `RECORD_DATA_COLUMNS` 数组是 DB schema 的**唯一真实来源**。新增列只改这里——INSERT/UPDATE SQL 从该数组自动生成。 |
-| `src/data/templates.js` | 离线疾病模板。导出 `getTemplate` / `getAttendingTemplate` / `getChiefTemplate` / `getPreopTemplate` / `getDiscussionTemplate` / `getSurgeryTemplate` / `getDischargeTemplate` / `getTemplateDiseases` 以及对应 `TEMPLATES` / `ATTENDING_TEMPLATES` / ... 对象。 |
+| `src/routes/recordTypes.js` | Registry REST API（9 个端点）。GET/PUT registry、分类 CRUD、类型 CRUD、重置。 |
+| `src/routes/api.js` | `POST /api/records/:typeId/generate` — 统一生成端点，支持所有类型。旧 7 个端点已注释。 |
+| `src/data/templates.js` | 离线疾病模板。导出 `getTemplate` / `getAttendingTemplate` / ... 对象。 |
 | `src/services/ai.js` | 多模型 AI 服务层。Provider 别名：`anthropic` → `claude`。支持 `openai` / `claude` / `gemini` / `deepseek` / `ollama`。 |
-| `src/services/promptTemplates.js` | 提示词模板管理。默认模板 `src/data/defaultPrompts.json`（只读），自定义模板存储在 `data/prompt-templates/`，活动模板名存 SQLite settings 表。 |
-| `public/js/store.js` | 自定义可观察状态管理。只在实际变化时通知。 |
+| `src/services/promptTemplates.js` | 提示词模板管理。3 层逻辑：现有模板 → `buildFromRegistryFields()` 自动生成 → 错误。 |
+| `src/services/ai-mock.js` | Mock 生成器。`MOCK_STRATEGIES` Map，旧 7 mock 函数 + `buildGenericMock()` 新类型通用 mock。 |
+| `public/js/store.js` | 自定义可观察状态管理 + registry 辅助方法（getTypeConfig/getActiveTypeData/setTypeData/setActiveType）。 |
 | `public/js/db.js` | 后端 API 客户端，所有数据通过后端 SQLite 持久化。 |
-| `public/js/components/EmrPreview.js` | 7 标签页 EMR 编辑器。`_activeTab` 取值：`firstCourse\|attendingRound\|chiefRound\|preop\|discussion\|surgery\|discharge`。 |
-| `public/js/components/SettingsPanel.js` | 模型管理面板。`__offline__` 哨兵值 = 离线/mock 模式。 |
+| `public/js/components/EmrPreview.js` | Registry 驱动的预览面板。动态渲染字段、统一重新生成/保存/历史。 |
+| `public/js/components/ChatArea.js` | 流式 AI 聊天。字段描述从 registry 动态生成，`_tryParseEMR()` 使用 `store.setTypeData()`。 |
+| `public/js/services/recordTypeApi.js` | 前端 Registry API 客户端（11 个方法）。 |
+| `public/js/components/RecordTypeManager.js` | 三栏配置器组件。分类/类型/字段 CRUD，开关启用。 |
+| `public/record-types.html` | 独立配置页面（访问 `/record-types`）。 |
 
 ## 开发约定
 

@@ -19,6 +19,7 @@
     </div>
     <span class="model-badge" id="modelBadge">⚙️ 未配置模型</span>
     <div class="header-actions">
+      <button id="btnRecordTypes" title="病历类型管理">🏷️ 病历类型</button>
       <button id="btnPrompts" title="提示词管理">✏️ 提示词</button>
       <button id="btnModels" title="模型管理 (Ctrl+M)">🧠 模型</button>
       <button id="btnPatients" title="患者管理">👤 患者</button>
@@ -105,65 +106,32 @@
         <!-- Bottom: EMR Preview -->
         <div class="pane" id="emrPane">
           <div class="pane-header">
-            <div class="pane-tabs">
-              <button class="pane-tab active" data-tab="firstCourse">📋 首次病程录</button>
-              <button class="pane-tab" data-tab="attendingRound">📋 主治查房</button>
-              <button class="pane-tab" data-tab="chiefRound">📋 主任查房</button>
-              <button class="pane-tab" data-tab="preop">📋 术前小结</button>
-              <button class="pane-tab" data-tab="discussion">📋 术前讨论</button>
-              <button class="pane-tab" data-tab="surgery">📋 手术记录</button>
-              <button class="pane-tab" data-tab="discharge">📋 出院小结</button>
-            </div>
+            <!-- Level 1: Category tabs (rendered by JS from registry) -->
+            <div class="category-tabs" id="categoryTabs"></div>
+            <!-- Level 2: Type tabs within active category (rendered by JS) -->
+            <div class="type-tabs" id="typeTabs"></div>
           </div>
-          <div class="pane-content emr-preview" id="emrPreview">
+          <div class="pane-content emr-preview" id="dynamicPreview">
             <div class="emr-placeholder">
               <div class="icon">📋</div>
               <div>选择疾病后自动生成</div>
               <div style="font-size:12px;color:var(--text-muted)">AI 将一次性生成完整结构化病历</div>
             </div>
           </div>
-          <div class="pane-content emr-preview" id="attendingPreview" style="display:none;">
+          <!-- Legacy preview containers (hidden, kept for backward compatibility) -->
+          <div class="pane-content emr-preview" id="emrPreview" style="display:none;">
             <div class="emr-placeholder">
               <div class="icon">📋</div>
               <div>选择疾病后自动生成</div>
-              <div style="font-size:12px;color:var(--text-muted)">主治医师首次查房病程记录</div>
+              <div style="font-size:12px;color:var(--text-muted)">AI 将一次性生成完整结构化病历</div>
             </div>
           </div>
-          <div class="pane-content emr-preview" id="chiefPreview" style="display:none;">
-            <div class="emr-placeholder">
-              <div class="icon">📋</div>
-              <div>选择疾病后自动生成</div>
-              <div style="font-size:12px;color:var(--text-muted)">主任医师首次查房病程记录</div>
-            </div>
-          </div>
-          <div class="pane-content emr-preview" id="preopPreview" style="display:none;">
-            <div class="emr-placeholder">
-              <div class="icon">📋</div>
-              <div>选择疾病后自动生成</div>
-              <div style="font-size:12px;color:var(--text-muted)">术前小结</div>
-            </div>
-          </div>
-          <div class="pane-content emr-preview" id="discussionPreview" style="display:none;">
-            <div class="emr-placeholder">
-              <div class="icon">📋</div>
-              <div>选择疾病后自动生成</div>
-              <div style="font-size:12px;color:var(--text-muted)">术前讨论记录</div>
-            </div>
-          </div>
-          <div class="pane-content emr-preview" id="surgeryPreview" style="display:none;">
-            <div class="emr-placeholder">
-              <div class="icon">📋</div>
-              <div>选择疾病后自动生成</div>
-              <div style="font-size:12px;color:var(--text-muted)">手术记录</div>
-            </div>
-          </div>
-          <div class="pane-content emr-preview" id="dischargePreview" style="display:none;">
-            <div class="emr-placeholder">
-              <div class="icon">📋</div>
-              <div>选择疾病后自动生成</div>
-              <div style="font-size:12px;color:var(--text-muted)">出院小结</div>
-            </div>
-          </div>
+          <div class="pane-content emr-preview" id="attendingPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="chiefPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="preopPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="discussionPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="surgeryPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="dischargePreview" style="display:none;"></div>
         </div>
 
       </div><!-- /content-split -->

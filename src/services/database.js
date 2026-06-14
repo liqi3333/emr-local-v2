@@ -19,6 +19,15 @@ const RECORD_DATA_COLUMNS = [
   'discussionParticipants', 'discussionCaseSummary', 'discussionDiagnosis', 'discussionContent', 'discussionConclusion', 'discussionSigned',
   'surgeryName', 'surgerySurgeon', 'surgeryAssistant', 'surgeryAnesthesia', 'surgeryProcess', 'surgeryFindings', 'surgerySigned',
   'dischargeAdmissionDate', 'dischargeDate', 'dischargeDiagnosis', 'dischargeTreatment', 'dischargeOutcome', 'dischargeAdvice', 'dischargeSigned',
+  // Consent forms
+  'surgeryIndication', 'surgeryRisks', 'alternatives', 'patientSignature', 'consentDate',
+  'bloodType', 'transfusionReason', 'bloodProducts', 'transfusionRisks',
+  'anesthesiaType', 'anesthesiaRisks', 'patientCondition',
+  // Nursing records
+  'admissionTime', 'vitalSigns', 'skinCondition', 'mobility', 'nutrition', 'mentalStatus',
+  'riskAssessment', 'nursingDiagnosis', 'goals', 'interventions', 'evaluation',
+  'healthEducation', 'dischargePlan', 'recordDate', 'recordTime', 'intakeOutput',
+  'medication', 'nursingInterventions', 'nurseSignature',
 ];
 
 class EMRDatabase {
@@ -102,6 +111,7 @@ class EMRDatabase {
         dischargeOutcome TEXT DEFAULT '',
         dischargeAdvice TEXT DEFAULT '',
         dischargeSigned TEXT DEFAULT '',
+        category TEXT DEFAULT 'clinicalRecords',
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (patientId) REFERENCES patients(id) ON DELETE CASCADE
@@ -111,7 +121,25 @@ class EMRDatabase {
       CREATE INDEX IF NOT EXISTS idx_records_disease ON records(disease);
       CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(createdAt);
       CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(createdAt);
+    `);
 
+    // Add new columns for consent/nursing records (safe to run multiple times)
+    const newColumns = [
+      'surgeryIndication', 'surgeryRisks', 'alternatives', 'patientSignature', 'consentDate',
+      'bloodType', 'transfusionReason', 'bloodProducts', 'transfusionRisks',
+      'anesthesiaType', 'anesthesiaRisks', 'patientCondition',
+      'admissionTime', 'vitalSigns', 'skinCondition', 'mobility', 'nutrition', 'mentalStatus',
+      'riskAssessment', 'nursingDiagnosis', 'goals', 'interventions', 'evaluation',
+      'healthEducation', 'dischargePlan', 'recordDate', 'recordTime', 'intakeOutput',
+      'medication', 'nursingInterventions', 'nurseSignature',
+    ];
+    for (const col of newColumns) {
+      try {
+        this._db.exec(`ALTER TABLE records ADD COLUMN ${col} TEXT DEFAULT ''`);
+      } catch { /* column already exists */ }
+    }
+
+    this._db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
@@ -126,6 +154,14 @@ class EMRDatabase {
     try {
       this._db.exec('ALTER TABLE records ADD COLUMN supplementHistory TEXT DEFAULT \'\'');
     } catch { /* column already exists */ }
+    // Add category column for existing databases
+    try {
+      this._db.exec("ALTER TABLE records ADD COLUMN category TEXT DEFAULT 'clinicalRecords'");
+    } catch { /* column already exists */ }
+    // Backfill category for legacy records
+    try {
+      this._db.exec("UPDATE records SET category = 'clinicalRecords' WHERE category IS NULL OR category = ''");
+    } catch { /* ignore */ }
   }
 
   _ensureSampleData() {
@@ -219,13 +255,18 @@ class EMRDatabase {
     return this._db.prepare('SELECT * FROM records WHERE id = ?').get(id);
   }
 
-  saveRecord(record) {
+  saveRecord(record, typeConfig) {
     const now = new Date().toISOString();
     const id = record.id || crypto.randomUUID();
     const existing = this.getRecordById(id);
 
     // Auto-generate SQL from RECORD_DATA_COLUMNS
     const dataValues = RECORD_DATA_COLUMNS.map(c => record[c] || '');
+
+    // Build content JSON: prefer registry-driven, fallback to old switch/case
+    const content = typeConfig
+      ? this._buildRecordContentFromRegistry(record, typeConfig)
+      : this._buildRecordContent(record);
 
     if (existing) {
       const setClauses = [
@@ -242,14 +283,15 @@ class EMRDatabase {
       ];
       this._db.prepare(`UPDATE records SET ${setClauses.join(', ')} WHERE id = ?`).run(...params);
     } else {
-      const insertCols = ['id', 'patientId', 'disease', 'type', 'content', ...RECORD_DATA_COLUMNS, 'createdAt', 'updatedAt'];
+      const insertCols = ['id', 'patientId', 'disease', 'type', 'category', 'content', ...RECORD_DATA_COLUMNS, 'createdAt', 'updatedAt'];
       const placeholders = insertCols.map(() => '?').join(', ');
       const params = [
         id,
         record.patientId,
         record.disease,
         record.type || 'firstCourse',
-        JSON.stringify(this._buildRecordContent(record)),
+        record.category || 'clinicalRecords',
+        JSON.stringify(content),
         ...dataValues,
         now,
         now
@@ -260,9 +302,19 @@ class EMRDatabase {
     return id;
   }
 
+  _buildRecordContentFromRegistry(record, typeConfig) {
+    const content = {};
+    if (typeConfig && Array.isArray(typeConfig.fields)) {
+      for (const field of typeConfig.fields) {
+        content[field.key] = record[field.key] || '';
+      }
+    }
+    return content;
+  }
+
   _buildRecordContent(record) {
     const type = record.type || 'firstCourse';
-    
+
     switch (type) {
       case 'firstCourse':
         return {
@@ -330,6 +382,66 @@ class EMRDatabase {
           dischargeOutcome: record.dischargeOutcome || '',
           dischargeAdvice: record.dischargeAdvice || '',
           dischargeSigned: record.dischargeSigned || ''
+        };
+      case 'surgeryConsent':
+        return {
+          surgeryName: record.surgeryName || '',
+          surgeryIndication: record.surgeryIndication || '',
+          surgeryRisks: record.surgeryRisks || '',
+          alternatives: record.alternatives || '',
+          patientSignature: record.patientSignature || '',
+          consentDate: record.consentDate || ''
+        };
+      case 'bloodTransfusionConsent':
+        return {
+          bloodType: record.bloodType || '',
+          transfusionReason: record.transfusionReason || '',
+          bloodProducts: record.bloodProducts || '',
+          transfusionRisks: record.transfusionRisks || '',
+          alternatives: record.alternatives || '',
+          patientSignature: record.patientSignature || '',
+          consentDate: record.consentDate || ''
+        };
+      case 'anesthesiaConsent':
+        return {
+          anesthesiaType: record.anesthesiaType || '',
+          surgeryName: record.surgeryName || '',
+          anesthesiaRisks: record.anesthesiaRisks || '',
+          alternatives: record.alternatives || '',
+          patientCondition: record.patientCondition || '',
+          patientSignature: record.patientSignature || '',
+          consentDate: record.consentDate || ''
+        };
+      case 'nursingAssessment':
+        return {
+          admissionTime: record.admissionTime || '',
+          vitalSigns: record.vitalSigns || '',
+          skinCondition: record.skinCondition || '',
+          mobility: record.mobility || '',
+          nutrition: record.nutrition || '',
+          mentalStatus: record.mentalStatus || '',
+          riskAssessment: record.riskAssessment || '',
+          nursingDiagnosis: record.nursingDiagnosis || ''
+        };
+      case 'nursingPlan':
+        return {
+          nursingDiagnosis: record.nursingDiagnosis || '',
+          goals: record.goals || '',
+          interventions: record.interventions || '',
+          evaluation: record.evaluation || '',
+          healthEducation: record.healthEducation || '',
+          dischargePlan: record.dischargePlan || ''
+        };
+      case 'nursingRecordSheet':
+        return {
+          recordDate: record.recordDate || '',
+          recordTime: record.recordTime || '',
+          vitalSigns: record.vitalSigns || '',
+          intakeOutput: record.intakeOutput || '',
+          medication: record.medication || '',
+          nursingInterventions: record.nursingInterventions || '',
+          patientCondition: record.patientCondition || '',
+          nurseSignature: record.nurseSignature || ''
         };
       default:
         return {};
