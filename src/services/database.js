@@ -5,9 +5,16 @@
 
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
 const DB_PATH = path.join(__dirname, '../../data/emr-local.db');
+const DB_DIR = path.dirname(DB_PATH);
+
+// Ensure data directory exists before opening the database
+if (!fs.existsSync(DB_DIR)) {
+  fs.mkdirSync(DB_DIR, { recursive: true });
+}
 
 // Single source of truth for record columns — add new columns here only
 // INSERT/UPDATE SQL is auto-generated from this array

@@ -64,8 +64,7 @@ AI 驱动的电子病历系统，支持 **13 种病历文书**（分 3 大类）
 ### 7. 数据存储
 
 - **SQLite 后端持久化**：`data/emr-local.db`，含 `patients` + `records` 表
-- **IndexedDB 离线回退**：前端同时写 IndexedDB，确保离线可用
-- **前后端双写机制**：在线时同步 SQLite，离线时自动回退到 IndexedDB
+- 前端通过后端 API 读写数据，无本地浏览器缓存
 
 ---
 
@@ -211,7 +210,7 @@ public/js/components/PromptEditor.js（前端可视化编辑器）
 | **安全性** | API Key 暴露在前端 localStorage | **后端代理**，API Key 配置在 `.env` |
 | **AI 调用** | 7 次独立请求 (≈ 21s) | **1 次请求 + JSON 结构化输出** (≈ 3s) |
 | **响应方式** | 全部完成后一次性显示 | **SSE 流式输出**，逐字渲染 |
-| **数据持久化** | 刷新丢失 | **SQLite + IndexedDB** 双写持久化 |
+| **数据持久化** | 刷新丢失 | **SQLite** 持久化存储 |
 | **病历类型** | 1 种 | **13 种**（3 大类，注册表管理） |
 | **类型管理** | 硬编码 | **注册表驱动**，动态启用/禁用/排序 |
 | **提示词管理** | 硬编码在 api.js 中 | **独立 JSON 模板** + 可视化编辑器 + 自定义模板 + 版本合并 |
@@ -229,40 +228,83 @@ public/js/components/PromptEditor.js（前端可视化编辑器）
 
 ## 七、快速开始
 
+### 1. 安装 Node.js
+
+本项目需要 **Node.js 18+**（附带 npm）。如果你还没有安装：
+
+- **Windows / macOS**：从 https://nodejs.org 下载 LTS 版本，双击安装即可。
+- **macOS（推荐 nvm）**：
+  ```bash
+  # 安装 nvm（Node 版本管理器）
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+  # 重启终端后执行
+  nvm install 18
+  nvm use 18
+  ```
+- **Linux**：
+  ```bash
+  # 推荐使用 nvm（同上），或通过包管理器安装
+  sudo apt install nodejs npm   # Debian/Ubuntu
+  ```
+
+**验证安装成功**：
 ```bash
-# 1. 安装依赖
-npm install
-
-# 2. 配置 API Key（可选，无 Key 时使用模拟模式）
-cp .env.example .env
-# 编辑 .env 填入你的 API Key
-
-# 3. 启动（开发模式，带热重载）
-npm run dev
-
-# 4. 浏览器打开
-# macOS
-open http://localhost:8000
-# Linux
-xdg-open http://localhost:8000
+node -v   # 应显示 v18.x.x 或更高
+npm -v    # 应显示 9.x.x 或更高
 ```
 
-> ⚠️ **端口被占用？** 如果启动时出现 `EADDRINUSE` 错误，说明 8000 端口已被其他进程占用。执行以下命令释放端口：
->
-> ```bash
-> # 查看占用 8000 端口的进程
-> lsof -i :8000
->
-> # 强制释放端口
-> kill -9 <PID>
-> ```
->
-> 或一行命令：
-> ```bash
-> lsof -ti:8000 | xargs kill -9
-> ```
->
-> 也可在 `.env` 中修改端口号：`PORT=8001`
+### 2. 下载项目
+
+```bash
+git clone <仓库地址>
+cd emr-local-v2
+```
+
+> 如果没有安装 Git，也可以在 GitHub 页面点击 **Code → Download ZIP**，解压后在终端进入该目录。
+
+### 3. 安装依赖
+
+```bash
+npm install
+```
+
+> 如遇 `better-sqlite3` 编译错误：
+> - macOS：`xcode-select --install`
+> - Linux：`sudo apt install build-essential`
+> - Windows：安装 Visual Studio Build Tools（勾选 C++ 桌面开发）
+
+### 4. 启动
+
+```bash
+npm run dev
+# 或生产模式：npm start
+```
+
+启动成功后终端会显示 `Server is running on http://localhost:8000`。
+
+> 首次运行会自动创建 `data/` 目录和 `data/emr-local.db` 数据库文件，无需手动配置。
+
+### 5. 打开浏览器
+
+访问 http://localhost:8000
+
+> 可选：配置 AI 模型后使用真实生成，不配置则自动进入离线模拟模式。
+> 如需配置，请先执行 `cp .env.example .env`，再填入你的 API Key。详见 [八、API 密钥配置](#八api-密钥配置)。
+
+---
+
+## 常见问题
+
+**端口被占用**（`EADDRINUSE` 错误）：
+```bash
+# macOS / Linux
+lsof -ti:8000 | xargs kill -9
+
+# Windows
+netstat -ano | findstr :8000    # 找到 PID
+taskkill /PID <PID> /F          # 杀掉进程
+```
+或在 `.env` 中修改端口号：`PORT=8001`
 
 ---
 
@@ -300,10 +342,10 @@ DEEPSEEK_API_KEY=...
 
 - **后端**：Node.js + Express (CommonJS)
 - **前端**：Vanilla JS (ES Modules) + CSS Custom Properties
-- **数据库**：SQLite（better-sqlite3）+ IndexedDB（浏览器回退）
+- **数据库**：SQLite（better-sqlite3）
 - **AI 提供商**：OpenAI / Claude / Gemini / DeepSeek / Ollama
 - **流式输出**：Server-Sent Events (SSE)
-- **Node 版本要求**：18+（内置 fetch）
+- **Node 版本要求**：18+（安装：https://nodejs.org 或 nvm install 18）
 
 ---
 
