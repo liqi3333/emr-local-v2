@@ -26,14 +26,18 @@ function _normalizeValue(v) {
 }
 
 function _createCopyBtn(value) {
+  const COPY_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+  const CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>';
   const btn = document.createElement('button');
   btn.className = 'copy-btn';
-  btn.textContent = '📋';
+  btn.innerHTML = COPY_SVG;
   btn.title = '复制';
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     navigator.clipboard.writeText(value).then(() => {
-      store.toast('success', '已复制');
+      btn.innerHTML = CHECK_SVG;
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = COPY_SVG; btn.classList.remove('copied'); }, 2000);
     }).catch(() => {
       store.toast('error', '复制失败');
     });
@@ -98,9 +102,9 @@ export class EmrPreview {
     toolbar.className = 'emr-toolbar';
     toolbar.innerHTML = `
       <button class="btn-primary" data-action="regenerate">🔄 重新生成</button>
-      <button data-action="save">💾 保存记录</button>
+      <button data-action="save">💾 保存病史</button>
       <button data-action="history">📋 查看历史</button>
-      <button data-action="export">📄 导出 PDF</button>
+      <button data-action="export">📄 导出 MD</button>
     `;
     container.appendChild(toolbar);
 
@@ -111,7 +115,7 @@ export class EmrPreview {
       if (action === 'regenerate') this._regenerate();
       else if (action === 'save') this._saveRecord();
       else if (action === 'history') this._showHistory();
-      else if (action === 'export') window.print();
+      else if (action === 'export') this._exportMarkdown();
     });
 
     // Loading
@@ -424,5 +428,40 @@ export class EmrPreview {
     } catch (err) {
       store.toast('error', '加载历史失败: ' + err.message);
     }
+  }
+
+  _exportMarkdown() {
+    const data = store.getActiveTypeData();
+    if (!data || Object.keys(data).length === 0) {
+      store.toast('info', '没有可导出的内容');
+      return;
+    }
+
+    const patient = store.state.currentPatient || {};
+    const disease = store.state.currentDisease || '';
+    const activeType = store.state.activeType;
+    const typeConfig = store.getTypeConfig(activeType);
+    const typeLabel = typeConfig?.label || activeType;
+    const fields = typeConfig?.fields || [];
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    let md = `# ${patient.name || '未知'} - ${disease} - ${typeLabel}\n\n`;
+    md += `**生成日期**：${date}\n\n`;
+
+    for (const field of fields) {
+      if (field.enabled === false) continue;
+      const value = (data[field.key] || '').trim();
+      if (!value) continue;
+      md += `## ${field.label}\n\n${value}\n\n`;
+    }
+
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${patient.name || '未知'}_${disease}_${typeLabel}_${date}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    store.toast('success', '已导出 Markdown 文件');
   }
 }

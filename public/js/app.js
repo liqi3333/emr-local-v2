@@ -125,17 +125,7 @@ function setupExport() {
   });
 }
 
-// ─── Patient Button (opens patient manager UI, but PatientManager already renders in the bar) ───
-function setupPatientButton() {
-  const btn = document.getElementById('btnPatients');
-  btn?.addEventListener('click', () => {
-    // Focus the first patient input
-    const nameInput = document.getElementById('patientName');
-    nameInput?.focus();
-    nameInput?.select();
-    store.toast('info', '在顶部患者栏编辑信息，点击患者卡片切换');
-  });
-}
+
 
 // ─── Prompts Button ───
 function setupPromptsButton() {
@@ -286,7 +276,6 @@ async function init() {
     setupKeyboardShortcuts();
     setupSidebarToggle();
     setupExport();
-    setupPatientButton();
     setupPromptsButton();
     setupRecordTypesButton();
     setupPaneDivider();
