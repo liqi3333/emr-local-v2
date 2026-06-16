@@ -11,8 +11,6 @@
  *   streamAI(provider, model, messages, apiKey, baseUrl) → AsyncGenerator<string>
  */
 
-const db = require("./database");
-
 // ──────────────────────────────────────────────
 //  Default configurations from environment
 // ──────────────────────────────────────────────
@@ -311,43 +309,15 @@ async function* readSSEStream(body, provider) {
 
 const { mockCallAI, mockStreamAI } = require("./ai-mock");
 
-/**
- * Get model configuration from SQLite settings table
- */
-function getDbModelConfig() {
-  const raw = db.getSetting("model_config");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
 function hasApiKey(provider, apiKey) {
   if (provider && resolveProvider(provider) === "ollama") return true;
   if (apiKey) return true;
   const config = DEFAULTS[resolveProvider(provider)];
   if (config && config.apiKey) return true;
-  // Fallback: check SQLite model_config
-  const dbConfig = getDbModelConfig();
-  if (dbConfig && dbConfig.provider === resolveProvider(provider) && dbConfig.apiKey) {
-    return true;
-  }
   return false;
 }
 
 async function callAI(provider, model, messages, apiKey, baseUrl) {
-  // Fallback: get config from SQLite if not provided
-  if (!provider && !apiKey) {
-    const dbConfig = getDbModelConfig();
-    if (dbConfig) {
-      provider = dbConfig.provider;
-      model = model || dbConfig.model;
-      apiKey = dbConfig.apiKey;
-      baseUrl = baseUrl || dbConfig.baseUrl;
-    }
-  }
 
   // Use mock mode if no API key
   if (!hasApiKey(provider, apiKey)) {
@@ -406,16 +376,6 @@ async function callAI(provider, model, messages, apiKey, baseUrl) {
  * Returns an AsyncGenerator that yields text chunks.
  */
 async function* streamAI(provider, model, messages, apiKey, baseUrl) {
-  // Fallback: get config from SQLite if not provided
-  if (!provider && !apiKey) {
-    const dbConfig = getDbModelConfig();
-    if (dbConfig) {
-      provider = dbConfig.provider;
-      model = model || dbConfig.model;
-      apiKey = dbConfig.apiKey;
-      baseUrl = baseUrl || dbConfig.baseUrl;
-    }
-  }
 
   // Use mock mode if no API key
   if (!hasApiKey(provider, apiKey)) {

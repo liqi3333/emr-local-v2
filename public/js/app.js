@@ -30,7 +30,7 @@ function renderToast() {
 }
 
 // ─── Model Badge Updater ───
-function updateModelBadge() {
+async function updateModelBadge() {
   const badge = document.getElementById('modelBadge');
   if (!badge) return;
   const activeId = localStorage.getItem('activeModelId') || '';
@@ -39,11 +39,17 @@ function updateModelBadge() {
     return;
   }
   try {
-    const models = JSON.parse(localStorage.getItem('models') || '[]');
-    const active = models.find((m) => m.id === activeId) || models[0];
-    badge.textContent = active
-      ? `🤖 ${active.name} (${active.provider})`
-      : '⚙️ 未配置模型';
+    const res = await fetch('/api/settings/env');
+    const config = await res.json();
+    if (config && config.defaultProvider) {
+      const providerLabel = { openai: 'OpenAI', claude: 'Claude', gemini: 'Gemini', deepseek: 'DeepSeek', ollama: 'Ollama' };
+      const providerConfig = config[config.defaultProvider];
+      if (providerConfig && providerConfig.model) {
+        badge.textContent = `🧠 ${providerLabel[config.defaultProvider] || config.defaultProvider} - ${providerConfig.model}`;
+        return;
+      }
+    }
+    badge.textContent = '⚙️ 未配置模型';
   } catch {
     badge.textContent = '⚙️ 未配置模型';
   }

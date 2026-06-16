@@ -801,6 +801,9 @@ a:hover { text-decoration: underline; }
   background: var(--surface);
 }
 .model-item .actions button:hover { background: var(--surface-hover); }
+.model-item .actions button:active { transform: scale(0.95); background: var(--primary-light); }
+.model-item .actions .btn-active { color: var(--accent); border-color: var(--accent); cursor: default; }
+.model-item .actions .btn-active:hover { background: var(--accent-light); }
 .model-item .actions .btn-del { color: var(--danger); border-color: var(--danger-light); }
 .model-item .actions .btn-del:hover { background: var(--danger-light); }
 .model-form {

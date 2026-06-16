@@ -113,30 +113,70 @@ function saveActiveId(id) {
   localStorage.setItem('activeModelId', id || '');
 }
 
-/** Get the active model object (or first available) */
-function getActiveModel() {
-  const activeId = loadActiveId();
-  if (activeId === '__offline__') return null;
-  const models = loadModels();
-  return models.find((m) => m.id === activeId) || models[0] || null;
+/** Fetch current config from backend .env file */
+async function loadConfigFromBackend() {
+  try {
+    const res = await fetch('/api/settings/env');
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn('[SettingsPanel] Failed to load config from backend:', err);
+    return null;
+  }
+}
+
+/** Save config to backend .env file */
+async function saveConfigToBackend(config) {
+  try {
+    const res = await fetch('/api/settings/env', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    const data = await res.json();
+    return data.success;
+  } catch (err) {
+    console.warn('[SettingsPanel] Failed to save config to backend:', err);
+    return false;
+  }
 }
 
 /** Update the header badge and store state */
-function updateModelUI() {
+async function updateModelUI() {
   const badge = document.getElementById('modelBadge');
+  if (!badge) return;
+
   const activeId = loadActiveId();
-  if (badge) {
-    if (activeId === '__offline__') {
-      badge.textContent = '📴 离线模式';
-    } else {
-      const active = getActiveModel();
-      badge.textContent = active
-        ? `🧠 ${active.name || active.modelName || '未命名模型'}`
-        : '⚙️ 未配置模型';
-    }
+  if (activeId === '__offline__') {
+    badge.textContent = '📴 离线模式';
+    store.setState({ activeModel: null });
+    return;
   }
-  // Let store know about active model (for API calls via getModelConfig)
-  store.setState({ activeModel: activeId === '__offline__' ? null : getActiveModel() });
+
+  try {
+    const config = await loadConfigFromBackend();
+    if (config && config.defaultProvider) {
+      const provider = PROVIDERS.find(p => p.id === config.defaultProvider);
+      const providerConfig = config[config.defaultProvider];
+      if (provider && providerConfig && providerConfig.model) {
+        badge.textContent = `🧠 ${provider.label} - ${providerConfig.model}`;
+        store.setState({
+          activeModel: {
+            provider: config.defaultProvider,
+            model: providerConfig.model,
+            baseUrl: providerConfig.baseUrl,
+            apiKey: providerConfig.apiKey,
+          }
+        });
+        return;
+      }
+    }
+    badge.textContent = '⚙️ 未配置模型';
+    store.setState({ activeModel: null });
+  } catch (err) {
+    badge.textContent = '⚙️ 未配置模型';
+    store.setState({ activeModel: null });
+  }
 }
 
 export class SettingsPanel {
@@ -219,12 +259,16 @@ export class SettingsPanel {
     this._renderModelList();
   }
 
-  _renderModelList() {
+  async _renderModelList() {
     const body = this._modalEl.querySelector('#settingsModalBody');
     if (!body) return;
+    body.innerHTML = '<div style="text-align:center;padding:20px;">加载中...</div>';
+
+    // 从后端加载配置
+    this._currentConfig = await loadConfigFromBackend();
+
     body.innerHTML = '';
 
-    const models = loadModels();
     const activeId = loadActiveId();
 
     // ── Offline mode card (always shown first) ──
@@ -249,33 +293,48 @@ export class SettingsPanel {
     });
     list.appendChild(offlineItem);
 
-    // ── Model items ──
-    if (models.length > 0) {
-      for (const model of models) {
+    // ── Model items from .env config — only show providers with API key ──
+    const config = this._currentConfig;
+    if (config) {
+      for (const prov of PROVIDERS) {
+        const providerConfig = config[prov.id];
+        if (!providerConfig) continue;
+        // Only show providers that have an API key configured
+        if (!providerConfig.apiKey) continue;
+
+        const isDefault = config.defaultProvider === prov.id;
+        const isOnlineActive = activeId !== '__offline__' && isDefault;
         const item = document.createElement('div');
-        item.className = 'model-item' + (model.id === activeId ? ' active' : '');
-        item.dataset.modelId = model.id;
+        item.className = 'model-item' + (isOnlineActive ? ' active' : '');
+        item.dataset.modelId = `__provider__${prov.id}`;
 
         const info = document.createElement('div');
         info.className = 'info';
+        const defaultTag = (isDefault && activeId !== '__offline__')
+          ? ' <span style="color:var(--primary);font-size:11px">[当前]</span>'
+          : '';
         info.innerHTML = `
-          <div class="name">${this._escapeHtml(model.name || model.modelName || '未命名模型')}</div>
-          <div class="detail">${this._escapeHtml(model.provider || '')} · ${this._escapeHtml(model.modelName || '')}</div>
+          <div class="name">${this._escapeHtml(prov.label)} — ${this._escapeHtml(providerConfig.model || '未配置模型')}${defaultTag}</div>
+          <div class="detail">${this._escapeHtml(prov.id)} · ••••••••</div>
         `;
         item.appendChild(info);
 
         const actions = document.createElement('div');
         actions.className = 'actions';
-        actions.innerHTML = `
-          <button data-action="select" title="设为活跃模型">✓</button>
-          <button data-action="edit" title="编辑">✎</button>
-          <button class="btn-del" data-action="delete" title="删除">🗑</button>
-        `;
+        if (isDefault && activeId !== '__offline__') {
+          actions.innerHTML = `
+            <button data-action="select" title="当前选中" class="btn-active">✓</button>
+            <button data-action="edit" title="编辑">✎</button>`;
+        } else {
+          actions.innerHTML = `
+            <button data-action="select" title="设为当前模型">✓</button>
+            <button data-action="edit" title="编辑">✎</button>`;
+        }
         item.appendChild(actions);
 
         item.addEventListener('click', (e) => {
           if (e.target.closest('.actions')) return;
-          this._selectModel(model.id);
+          this._selectModel(`__provider__${prov.id}`);
         });
 
         list.appendChild(item);
@@ -341,15 +400,41 @@ export class SettingsPanel {
   //  Model CRUD
   // ────────────────────────────────────────────────────────────────
 
-  _selectModel(id) {
+  async _selectModel(id) {
     if (id === '__offline__') {
       saveActiveId('__offline__');
       updateModelUI();
-      // Update visual active state
       const items = this._modalEl.querySelectorAll('.model-item');
       items.forEach((item) => {
         item.classList.toggle('active', item.dataset.modelId === '__offline__');
       });
+      return;
+    }
+
+    // Switch default provider in .env
+    if (id.startsWith('__provider__')) {
+      const providerId = id.replace('__provider__', '');
+      const config = await loadConfigFromBackend();
+      if (config && config[providerId]) {
+        await saveConfigToBackend({ provider: providerId });
+        // Also sync to localStorage for api.js
+        const providerConfig = config[providerId];
+        const model = {
+          id: 'current',
+          name: providerId,
+          provider: providerId,
+          baseUrl: providerConfig.baseUrl || '',
+          modelName: providerConfig.model || '',
+          apiKey: providerConfig.apiKey || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        localStorage.setItem('models', JSON.stringify([model]));
+        localStorage.setItem('activeModelId', 'current');
+      }
+      saveActiveId('current');
+      await updateModelUI();
+      this._renderModelList();
       return;
     }
 
@@ -360,7 +445,6 @@ export class SettingsPanel {
     saveActiveId(id);
     updateModelUI();
 
-    // Update visual active state
     const items = this._modalEl.querySelectorAll('.model-item');
     items.forEach((item) => {
       item.classList.toggle('active', item.dataset.modelId === id);
@@ -368,6 +452,23 @@ export class SettingsPanel {
   }
 
   _editModel(id) {
+    if (id.startsWith('__provider__')) {
+      const providerId = id.replace('__provider__', '');
+      const config = this._currentConfig;
+      if (config && config[providerId]) {
+        const providerConfig = config[providerId];
+        this._editingId = id;
+        this._showForm({
+          name: providerId,
+          provider: providerId,
+          baseUrl: providerConfig.baseUrl || '',
+          modelName: providerConfig.model || '',
+          apiKey: providerConfig.apiKey || '',
+        });
+      }
+      return;
+    }
+
     const models = loadModels();
     const model = models.find((m) => m.id === id);
     if (!model) return;
@@ -537,17 +638,12 @@ export class SettingsPanel {
     });
   }
 
-  _saveForm(form) {
-    const name = form.querySelector('#mfName').value.trim();
+  async _saveForm(form) {
     const provider = form.querySelector('#mfProvider').value;
     const baseUrl = form.querySelector('#mfBaseUrl').value.trim();
     const modelName = form.querySelector('#mfModelName').value.trim();
     const apiKey = form.querySelector('#mfApiKey').value.trim();
 
-    if (!name) {
-      alert('请输入模型名称');
-      return;
-    }
     if (!baseUrl) {
       alert('请输入 Base URL');
       return;
@@ -556,55 +652,39 @@ export class SettingsPanel {
       alert('请输入模型名称 (Model Name)');
       return;
     }
-    if (!apiKey && provider !== 'ollama') {
+    if (!apiKey && provider !== 'ollama' && !this._editingId) {
       alert('请输入 API Key');
       return;
     }
 
-    const models = loadModels();
-    const now = new Date().toISOString();
+    // 保存到 .env 文件
+    const savePayload = { provider, baseUrl, model: modelName };
+    if (apiKey) savePayload.apiKey = apiKey;
 
-    if (this._editingId) {
-      // Update existing
-      const idx = models.findIndex((m) => m.id === this._editingId);
-      if (idx !== -1) {
-        models[idx] = {
-          ...models[idx],
-          name,
-          provider,
-          baseUrl,
-          modelName,
-          apiKey,
-          updatedAt: now,
-        };
-      }
-    } else {
-      // Add new
-      const newModel = {
-        id: generateId(),
-        name,
+    const success = await saveConfigToBackend(savePayload);
+
+    if (success) {
+      // 双写：同时写入 localStorage（供 api.js 使用）
+      const model = {
+        id: 'current',
+        name: provider,
         provider,
         baseUrl,
         modelName,
-        apiKey,
-        createdAt: now,
-        updatedAt: now,
+        apiKey: apiKey || '(已配置)',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
-      models.push(newModel);
+      localStorage.setItem('models', JSON.stringify([model]));
+      localStorage.setItem('activeModelId', 'current');
 
-      // Auto-select first model
-      if (models.length === 1) {
-        saveActiveId(newModel.id);
-      }
+      alert('配置已保存到 .env 文件！请重启服务器使配置生效。');
+      await updateModelUI();
+    } else {
+      alert('保存失败，请重试。');
     }
 
-    saveModels(models);
-    updateModelUI();
-
-    // Sync to backend (silent)
-    this._syncToBackend({ provider, baseUrl, model: modelName, apiKey });
-
-    // Hide form and refresh list
+    // 隐藏表单
     const container = this._modalEl.querySelector('#modelFormContainer');
     if (container) {
       container.style.display = 'none';
@@ -620,8 +700,8 @@ export class SettingsPanel {
 
   async _syncToBackend(config) {
     try {
-      // Sync to SQLite (primary storage)
-      await fetch('/api/settings/model-config', {
+      // Sync to .env 文件
+      await fetch('/api/settings/env', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
