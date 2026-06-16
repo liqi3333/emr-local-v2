@@ -11,28 +11,30 @@
  *   streamAI(provider, model, messages, apiKey, baseUrl) → AsyncGenerator<string>
  */
 
+const db = require("./database");
+
 // ──────────────────────────────────────────────
 //  Default configurations from environment
 // ──────────────────────────────────────────────
 const DEFAULTS = {
   openai: {
     baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
-    model: process.env.OPENAI_MODEL || "gpt-4o",
+    model: process.env.OPENAI_MODEL || "gpt-5.4",
     apiKey: process.env.OPENAI_API_KEY || "",
   },
   claude: {
     baseUrl: "https://api.anthropic.com",
-    model: process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514",
+    model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
     apiKey: process.env.CLAUDE_API_KEY || "",
   },
   gemini: {
-    baseUrl: "https://generativelanguage.googleapis.com",
-    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     apiKey: process.env.GEMINI_API_KEY || "",
   },
   deepseek: {
     baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
-    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+    model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
     apiKey: process.env.DEEPSEEK_API_KEY || "",
   },
   ollama: {
@@ -147,7 +149,8 @@ function buildRequest({
       const endpoint = stream ? "streamGenerateContent" : "generateContent";
       // Remove trailing slash from baseUrl if present
       const cleanBase = resolvedBase.replace(/\/+$/, "");
-      url = `${cleanBase}/models/${resolvedModel}:${endpoint}?key=${resolvedKey}`;
+      const altParam = stream ? "&alt=sse" : "";
+      url = `${cleanBase}/models/${resolvedModel}:${endpoint}?key=${resolvedKey}${altParam}`;
       headers = { "Content-Type": "application/json" };
 
       // Gemini uses {contents} instead of {messages}, system_instruction is separate
@@ -165,7 +168,13 @@ function buildRequest({
           parts: [{ text: m.content }],
         }));
 
-      body = { contents };
+      body = {
+        contents,
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.7,
+        },
+      };
       if (systemInstruction) {
         body.system_instruction = { parts: [{ text: systemInstruction }] };
       }
@@ -223,7 +232,9 @@ function extractStreamChunk(provider, parsed) {
       return null;
     }
     case "gemini": {
-      const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+      // Streaming returns array [{$ref, candidates}], non-streaming returns object
+      const chunk = Array.isArray(parsed) ? parsed[0] : parsed;
+      const text = chunk?.candidates?.[0]?.content?.parts?.[0]?.text;
       return text || null;
     }
     default:
@@ -300,14 +311,44 @@ async function* readSSEStream(body, provider) {
 
 const { mockCallAI, mockStreamAI } = require("./ai-mock");
 
+/**
+ * Get model configuration from SQLite settings table
+ */
+function getDbModelConfig() {
+  const raw = db.getSetting("model_config");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 function hasApiKey(provider, apiKey) {
   if (provider && resolveProvider(provider) === "ollama") return true;
   if (apiKey) return true;
   const config = DEFAULTS[resolveProvider(provider)];
-  return !!(config && config.apiKey);
+  if (config && config.apiKey) return true;
+  // Fallback: check SQLite model_config
+  const dbConfig = getDbModelConfig();
+  if (dbConfig && dbConfig.provider === resolveProvider(provider) && dbConfig.apiKey) {
+    return true;
+  }
+  return false;
 }
 
 async function callAI(provider, model, messages, apiKey, baseUrl) {
+  // Fallback: get config from SQLite if not provided
+  if (!provider && !apiKey) {
+    const dbConfig = getDbModelConfig();
+    if (dbConfig) {
+      provider = dbConfig.provider;
+      model = model || dbConfig.model;
+      apiKey = dbConfig.apiKey;
+      baseUrl = baseUrl || dbConfig.baseUrl;
+    }
+  }
+
   // Use mock mode if no API key
   if (!hasApiKey(provider, apiKey)) {
     return mockCallAI(messages);
@@ -365,6 +406,17 @@ async function callAI(provider, model, messages, apiKey, baseUrl) {
  * Returns an AsyncGenerator that yields text chunks.
  */
 async function* streamAI(provider, model, messages, apiKey, baseUrl) {
+  // Fallback: get config from SQLite if not provided
+  if (!provider && !apiKey) {
+    const dbConfig = getDbModelConfig();
+    if (dbConfig) {
+      provider = dbConfig.provider;
+      model = model || dbConfig.model;
+      apiKey = dbConfig.apiKey;
+      baseUrl = baseUrl || dbConfig.baseUrl;
+    }
+  }
+
   // Use mock mode if no API key
   if (!hasApiKey(provider, apiKey)) {
     yield* mockStreamAI(messages);

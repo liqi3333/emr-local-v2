@@ -15,39 +15,73 @@ import { store } from '../store.js';
 const PROVIDERS = [
   {
     id: 'openai',
-    label: 'OpenAI 兼容',
+    label: 'OpenAI',
     defaultBaseUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-4o',
+    defaultModel: 'gpt-5.4',
+    models: [
+      { value: 'gpt-5.5', label: 'GPT-5.5 (最新)' },
+      { value: 'gpt-5.4', label: 'GPT-5.4 (稳定)' },
+      { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+      { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano' },
+      { value: 'gpt-4o', label: 'GPT-4o (旧版本)' },
+    ],
   },
   {
     id: 'claude',
     label: 'Claude (Anthropic)',
     defaultBaseUrl: 'https://api.anthropic.com',
-    defaultModel: 'claude-sonnet-4-20250514',
+    defaultModel: 'claude-sonnet-4-6',
+    models: [
+      { value: 'claude-opus-4-8', label: 'Claude Opus 4.8 (最新)' },
+      { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
+      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (推荐)' },
+      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (最快)' },
+    ],
   },
   {
     id: 'gemini',
     label: 'Google Gemini',
     defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: 'gemini-2.5-flash',
+    models: [
+      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (推荐)' },
+      { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (备选)' },
+      { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (最新)' },
+      { value: 'gemma-4-31b', label: 'Gemma 4 31B' },
+      { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' },
+      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (预览)' },
+    ],
   },
   {
     id: 'deepseek',
     label: 'DeepSeek',
     defaultBaseUrl: 'https://api.deepseek.com/v1',
-    defaultModel: 'deepseek-chat',
+    defaultModel: 'deepseek-v4-flash',
+    models: [
+      { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro (最新)' },
+      { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash (推荐)' },
+      { value: 'deepseek-chat', label: 'DeepSeek Chat (旧版本)' },
+      { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner (旧版本)' },
+    ],
   },
   {
     id: 'ollama',
     label: 'Ollama (本地)',
     defaultBaseUrl: 'http://localhost:11434/v1',
     defaultModel: 'qwen2.5:1.5b',
+    models: [
+      { value: 'qwen2.5:1.5b', label: 'Qwen 2.5 1.5B' },
+      { value: 'qwen2.5:7b', label: 'Qwen 2.5 7B' },
+      { value: 'llama3.2:3b', label: 'Llama 3.2 3B' },
+      { value: 'phi3:mini', label: 'Phi-3 Mini' },
+    ],
   },
   {
     id: 'custom',
     label: '自定义 OpenAI 兼容',
     defaultBaseUrl: '',
     defaultModel: '',
+    models: [],
   },
 ];
 
@@ -380,7 +414,24 @@ export class SettingsPanel {
     const form = document.createElement('div');
     form.className = 'model-form';
 
-    // Name
+    // Get current provider's models
+    const currentProvider = PROVIDERS.find((p) => p.id === (model?.provider || 'openai'));
+    const currentModels = currentProvider?.models || [];
+    const currentModelName = model?.modelName || '';
+
+    // Helper to generate model select options
+    const generateModelOptions = (models, selectedValue) => {
+      const options = models.map(
+        (m) =>
+          `<option value="${m.value}" ${m.value === selectedValue ? 'selected' : ''}>${m.label}</option>`
+      ).join('');
+      const hasSelected = models.some(m => m.value === selectedValue);
+      if (!hasSelected && selectedValue) {
+        return `<option value="${selectedValue}" selected>${selectedValue}</option>${options}`;
+      }
+      return options;
+    };
+
     form.innerHTML = `
       <label>模型名称</label>
       <input id="mfName" type="text" placeholder="例如: GPT-4o" value="${this._escapeHtml(model?.name || '')}" />
@@ -399,7 +450,13 @@ export class SettingsPanel {
       <input id="mfBaseUrl" type="text" placeholder="https://api.openai.com/v1" value="${this._escapeHtml(model?.baseUrl || '')}" />
 
       <label>模型名称 (Model Name)</label>
-      <input id="mfModelName" type="text" placeholder="gpt-4o" value="${this._escapeHtml(model?.modelName || '')}" />
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="mfModelSelect" style="flex:1">
+          ${generateModelOptions(currentModels, currentModelName)}
+          ${currentModels.length === 0 ? `<option value="__custom__" selected>自定义...</option>` : ''}
+        </select>
+      </div>
+      <input id="mfModelName" type="text" placeholder="输入自定义模型名" value="${this._escapeHtml(currentModelName)}" style="display:${currentModels.length === 0 || !currentModels.some(m => m.value === currentModelName) ? 'block' : 'none'}" />
 
       <label>API Key</label>
       <div style="position:relative">
@@ -421,20 +478,42 @@ export class SettingsPanel {
 
     container.appendChild(form);
 
-    // Auto-fill base URL when provider changes
+    // Auto-fill base URL and update model list when provider changes
     const providerSelect = form.querySelector('#mfProvider');
     const baseUrlInput = form.querySelector('#mfBaseUrl');
+    const modelSelect = form.querySelector('#mfModelSelect');
+    const modelNameInput = form.querySelector('#mfModelName');
 
-    providerSelect.addEventListener('change', () => {
-      const provider = PROVIDERS.find((p) => p.id === providerSelect.value);
+    const updateModelList = (providerId) => {
+      const provider = PROVIDERS.find((p) => p.id === providerId);
       if (provider && provider.defaultBaseUrl) {
         baseUrlInput.value = provider.defaultBaseUrl;
       }
-      // Auto-fill model name
-      const modelNameInput = form.querySelector('#mfModelName');
-      if (provider && provider.defaultModel) {
-        modelNameInput.value = provider.defaultModel;
+      // Update model select options
+      const models = provider?.models || [];
+      modelSelect.innerHTML = generateModelOptions(models, provider?.defaultModel || '');
+      if (models.length === 0) {
+        modelSelect.innerHTML = '<option value="__custom__" selected>自定义...</option>';
+        modelNameInput.value = '';
+        modelNameInput.style.display = 'block';
+      } else {
+        modelNameInput.value = provider?.defaultModel || '';
+        modelNameInput.style.display = 'none';
       }
+    };
+
+    modelSelect.addEventListener('change', () => {
+      if (modelSelect.value === '__custom__') {
+        modelNameInput.value = '';
+        modelNameInput.style.display = 'block';
+      } else {
+        modelNameInput.value = modelSelect.value;
+        modelNameInput.style.display = 'none';
+      }
+    });
+
+    providerSelect.addEventListener('change', () => {
+      updateModelList(providerSelect.value);
     });
 
     // Toggle API Key visibility
@@ -522,6 +601,9 @@ export class SettingsPanel {
     saveModels(models);
     updateModelUI();
 
+    // Sync to backend (silent)
+    this._syncToBackend({ provider, baseUrl, model: modelName, apiKey });
+
     // Hide form and refresh list
     const container = this._modalEl.querySelector('#modelFormContainer');
     if (container) {
@@ -530,6 +612,23 @@ export class SettingsPanel {
     }
     this._editingId = null;
     this._renderModelList();
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  //  Backend Sync (silent)
+  // ────────────────────────────────────────────────────────────────
+
+  async _syncToBackend(config) {
+    try {
+      // Sync to SQLite (primary storage)
+      await fetch('/api/settings/model-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+    } catch (err) {
+      console.warn('[SettingsPanel] Failed to sync to backend:', err);
+    }
   }
 
   // ────────────────────────────────────────────────────────────────

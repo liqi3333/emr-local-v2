@@ -54,21 +54,14 @@ lsof -ti:8000 | xargs kill -9
 
 ## 注意事项
 
-- **模板修改需重启**：`src/data/templates.js` 是 CommonJS `require()` 加载；`npm run dev`（`node --watch`）会自动重启，但 `npm start` 不会热重载，修改后需手动重启。
+- **Registry 存储在 SQLite**：Registry 数据存储在 `settings` 表（key `record_registry`），而非 JSON 文件。服务启动时 `server.js:49-50` 调用 `ensureDefaultRegistry()` + `migrateLegacyTypes()` 初始化。
 - **`RECORD_DATA_COLUMNS` 是权威来源**：`saveRecord()` 从该数组动态生成 SQL。不要手动数 `?` 占位符或硬编码列数。
-- **`content` 列仅 INSERT 时写入**：`saveRecord()` 在 INSERT 时写入 `content` JSON（由 `_buildRecordContent` 生成），UPDATE 时不会更新该列。`_buildRecordContent` 新增字段后，旧记录的 `content` 仍保持旧值。
-- **`.env.example` 不完整**：`ai.js` 会读取 `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` / `OLLAMA_API_KEY` / `OLLAMA_BASE_URL` / `OLLAMA_MODEL`，但 `.env.example` 中未列出。新增 provider 时记得同步到 `.env.example`。
+- **`content` 列仅 INSERT 时写入**：`saveRecord()` 在 INSERT 时写入 `content` JSON（由 `_buildRecordContent` 生成），UPDATE 时不会更新该列。新增字段后旧记录的 `content` 仍保持旧值。
+- **模板缓存清理**：`src/routes/api.js` 中的模板路由使用 `delete require.cache[require.resolve('../data/templates')]` 确保加载最新模板。修改 `templates.js` 后 `npm run dev` 会自动重启，但 `npm start` 不会热重载。
 - **提示词编辑页面**：访问 `/prompts` 可打开提示词模板编辑器，用于可视化编辑 AI 生成提示词。
-- **Provider ID 不一致**：前端 SettingsPanel 用 `claude`，后端 `resolveProvider()` 映射 `anthropic` → `claude`。新增 provider 时两边要同步。
+- **Provider 别名映射**：后端 `resolveProvider()` 将 `anthropic` 映射为 `claude`。前端 SettingsPanel 和后端都使用 `claude` 作为 provider ID。新增 provider 时两边要同步。
 - **速率限制全局生效**：`createRateLimiter` 应用于所有 `/api` 路由，限 60 次/分钟（包括 mock 请求）。
-- **离线哨兵值**：模型配置中 `__offline__` 触发 mock 模式 → `getModelConfig()` 返回 null → 回退到模板。
-- **Mock 模式**：当无 API Key 时，`ai.js` 自动使用 `ai-mock.js` 生成模拟数据，无需外部服务。
+- **Mock 模式**：当无 API Key 时，`ai.js` 自动使用 `ai-mock.js` 生成模拟数据，无需外部服务。`__offline__` 哨兵值触发 mock 模式。
 - **SSE 错误处理**：流式错误必须传递到前端（不能静默吞掉）。POST/SSE 路由用 `res.on('close')` 而非 `req.on('close')`。
-
-- **历史记录按标签过滤**：`EmrPreview.js` 的 `_showHistory()` 按 `store.state.activeType` 过滤，只显示当前标签类型的记录。
-- **`_buildRecordContent` 必须覆盖所有字段**：`database.js` 的 `_buildRecordContent()` 按 type 分支返回 content JSON。新增字段时必须同步更新对应 case（如 `chiefRound` 需包含 `chiefNotes`），否则 INSERT 时字段丢失。
+- **`_buildRecordContent` 必须覆盖所有字段**：`database.js` 的 `_buildRecordContent()` 按 type 分支返回 content JSON。新增字段时必须同步更新对应 case，否则 INSERT 时字段丢失。
 - **AI 对话可修改所有病历类型**：`ChatArea.js` 的系统提示词动态获取当前 active type 的 registry 配置，`_tryParseEMR()` 通过 `store.setTypeData(activeType, ...)` 通用路由写入。新增类型时无需改 `_tryParseEMR()`，但需在 `promptTemplates.js` 中配置提示词模板。
-
-## 规划中的功能
-
-- **同意书/护理记录离线模板**：`CONSENT_TEMPLATES` 和 `NURSING_TEMPLATES` 存储按疾病分类的模板。目前仅支持「腹股沟疝」，其他疾病需在 `templates.js` 中扩展。

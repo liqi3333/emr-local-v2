@@ -335,13 +335,25 @@ export class PromptEditor {
     const defaultFields = defaultType.fields || {};
     const currentFields = currentType.fields || {};
 
-    tbody.innerHTML = Object.entries(defaultFields).map(([key, defaultField]) => {
+    // Use Registry fields as the source of truth for field list and order
+    const fieldEntries = (regType?.fields || [])
+      .filter(f => f.enabled !== false)
+      .map(f => ({ key: f.key, regField: f }));
+
+    // Fallback: also show fields that exist only in the template (legacy custom fields)
+    for (const key of Object.keys(defaultFields)) {
+      if (!regFieldsMap[key]) {
+        fieldEntries.push({ key, regField: null });
+      }
+    }
+
+    tbody.innerHTML = fieldEntries.map(({ key, regField }) => {
       const customField = currentFields[key];
-      const regField = regFieldsMap[key];
+      const defaultField = defaultFields[key];
       const isCustom = !!customField;
-      const label = customField?.label || defaultField.label || regField?.label || key;
-      // Prefer registry description (source of truth), fallback to template
-      const description = customField?.description || regField?.description || defaultField.description || '';
+      const label = customField?.label || defaultField?.label || regField?.label || key;
+      // Prefer registry description, then custom override, then default template
+      const description = customField?.description || regField?.description || defaultField?.description || '';
       const source = isCustom ? '自定义' : (regField ? 'Registry' : '默认');
 
       return `
@@ -473,13 +485,25 @@ export class PromptEditor {
 
     const result = {};
 
-    // Start with default template fields (defines order)
-    for (const [key, defaultField] of Object.entries(defaultType.fields || {})) {
+    // Start with registry fields (source of truth)
+    for (const regField of regType?.fields || []) {
+      if (regField.enabled === false) continue;
+      const key = regField.key;
       const customField = currentType.fields?.[key];
-      const regField = regFieldsMap[key];
+      const defaultField = defaultType.fields?.[key];
       result[key] = {
-        label: customField?.label || defaultField?.label || regField?.label || key,
-        description: customField?.description || regField?.description || defaultField?.description || '',
+        label: customField?.label || defaultField?.label || regField.label || key,
+        description: customField?.description || regField.description || defaultField?.description || '',
+      };
+    }
+
+    // Fallback: include fields that exist only in the template (legacy custom fields)
+    for (const [key, defaultField] of Object.entries(defaultType.fields || {})) {
+      if (result[key]) continue;
+      const customField = currentType.fields?.[key];
+      result[key] = {
+        label: customField?.label || defaultField.label || key,
+        description: customField?.description || defaultField.description || '',
       };
     }
 

@@ -6,6 +6,7 @@ const apiRouter = require('./src/routes/api');
 const crudRouter = require('./src/routes/crud');
 const promptsRouter = require('./src/routes/prompts');
 const recordTypesRouter = require('./src/routes/recordTypes');
+const settingsRouter = require('./src/routes/settings');
 const { ensureDefaultRegistry, migrateLegacyTypes } = require('./src/services/recordRegistry');
 
 const app = express();
@@ -29,6 +30,7 @@ app.use('/api', apiRouter);
 app.use('/api', crudRouter);
 app.use('/api', promptsRouter);
 app.use('/api', recordTypesRouter);
+app.use('/api', settingsRouter);
 
 // ── Prompt editor page ──
 app.get('/prompts', (req, res) => {

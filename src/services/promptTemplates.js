@@ -243,9 +243,14 @@ function getMergedTemplate(name) {
     merged.templates[typeKey].endingPrompt = customType.endingPrompt || defaultType.endingPrompt;
     merged.templates[typeKey].userPrompt = customType.userPrompt || defaultType.userPrompt;
 
-    // Fields follow default order; custom descriptions override defaults
+    // Merge all field keys from default and custom templates
     const mergedFields = {};
-    for (const [fieldKey, defaultField] of Object.entries(defaultType.fields || {})) {
+    const allFieldKeys = new Set([
+      ...Object.keys(defaultType.fields || {}),
+      ...Object.keys(customType.fields || {}),
+    ]);
+    for (const fieldKey of allFieldKeys) {
+      const defaultField = defaultType.fields?.[fieldKey];
       const customField = customType.fields?.[fieldKey];
       mergedFields[fieldKey] = customField
         ? { ...defaultField, ...customField }
@@ -391,12 +396,23 @@ function assembleFieldBlock(typeConfig, registryTypeConfig) {
   }
 
   const templateFields = typeConfig.fields || {};
-  for (const key of Object.keys(templateFields)) {
-    const registryField = registryFieldsMap[key];
-    if (registryField && registryField.enabled === false) continue;
 
-    // Prefer registry description, fallback to template description
-    const description = (registryField && registryField.description) || templateFields[key].description || '';
+  // Use registry fields as the source of truth for field list and order
+  const fieldKeys = (registryTypeConfig?.fields || [])
+    .filter(f => f.enabled !== false)
+    .map(f => f.key);
+
+  // Fallback: include fields that exist only in the template (legacy custom fields)
+  for (const key of Object.keys(templateFields)) {
+    if (!registryFieldsMap[key]) {
+      fieldKeys.push(key);
+    }
+  }
+
+  for (const key of fieldKeys) {
+    const registryField = registryFieldsMap[key];
+    // Prefer template description (custom/default), fallback to registry description
+    const description = templateFields[key]?.description || (registryField && registryField.description) || '';
     fieldObj[key] = description;
   }
 
