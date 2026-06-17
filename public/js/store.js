@@ -30,6 +30,9 @@ class Store {
       recordRegistry: null,   // { categories: [...] } from API, null until loaded
       activeCategory: 'clinicalRecords', // current category ID
       activeType: 'firstCourse',         // current type ID within active category
+
+      // ─── Disease catalog state ───
+      diseaseCategories: null, // Array of category objects from /api/diseases, null until loaded
     };
   }
 
@@ -64,6 +67,7 @@ class Store {
       patients: this._state.patients,
       records: this._state.records,
       recordRegistry: this._state.recordRegistry,
+      diseaseCategories: this._state.diseaseCategories,
     };
     this._state = {
       currentPatient: null,

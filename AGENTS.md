@@ -32,8 +32,10 @@ lsof -ti:8000 | xargs kill -9
 | `src/services/database.js` | `RECORD_DATA_COLUMNS` 数组是 DB schema 的**唯一真实来源**。新增列只改这里——INSERT/UPDATE SQL 从该数组自动生成。 |
 | `src/routes/recordTypes.js` | Registry REST API（9 个端点）。GET/PUT registry、分类 CRUD、类型 CRUD、重置。 |
 | `src/routes/api.js` | `POST /api/records/:typeId/generate` — 统一生成端点，支持所有类型。旧 7 个端点已恢复为 DEPRECATED 代理（向后兼容）。 |
+| `src/routes/settings.js` | 模型配置 REST API。`GET/PUT /api/settings/env` — 读写 `.env` 文件中的模型配置。 |
+| `src/services/envWriter.js` | `.env` 文件读写服务。`updateEnvConfig()` / `getAllEnvConfig()` — 解析和更新 provider 配置。 |
 | `src/data/templates.js` | 离线疾病模板。导出 `getTemplate` / `getAttendingTemplate` / ... `getConsentTemplate` / `getNursingTemplate` / `getTemplateDiseases` 等 getter。 |
-| `src/services/ai.js` | 多模型 AI 服务层。Provider 别名：`anthropic` → `claude`。支持 `openai` / `claude` / `gemini` / `deepseek` / `ollama`。 |
+| `src/services/ai.js` | 多模型 AI 服务层。Provider 别名：`anthropic` → `claude`。支持 `openai` / `claude` / `gemini` / `deepseek` / `ollama`。配置从 `process.env` 读取（`.env` 文件）。 |
 | `src/services/promptTemplates.js` | 提示词模板管理。3 层逻辑：现有模板 → `buildFromRegistryFields()` 自动生成 → 错误。 |
 | `src/services/ai-mock.js` | Mock 生成器。`MOCK_STRATEGIES` Map，旧 7 mock 函数 + 6 个同意书/护理记录专用 mock + `buildGenericMock()` 兜底。 |
 | `public/js/store.js` | 自定义可观察状态管理 + registry 辅助方法（getTypeConfig/getActiveTypeData/setTypeData/setActiveType）。 |
@@ -62,6 +64,7 @@ lsof -ti:8000 | xargs kill -9
 - **Provider 别名映射**：后端 `resolveProvider()` 将 `anthropic` 映射为 `claude`。前端 SettingsPanel 和后端都使用 `claude` 作为 provider ID。新增 provider 时两边要同步。
 - **速率限制全局生效**：`createRateLimiter` 应用于所有 `/api` 路由，限 60 次/分钟（包括 mock 请求）。
 - **Mock 模式**：当无 API Key 时，`ai.js` 自动使用 `ai-mock.js` 生成模拟数据，无需外部服务。`__offline__` 哨兵值触发 mock 模式。
+- **模型配置统一到 .env**：所有模型配置（API Key、Base URL、Model）存储在 `.env` 文件中。前端 GUI 通过 `GET/PUT /api/settings/env` 读写。`ai.js` 直接从 `process.env` 读取，无 SQLite 回退。
 - **SSE 错误处理**：流式错误必须传递到前端（不能静默吞掉）。POST/SSE 路由用 `res.on('close')` 而非 `req.on('close')`。
 - **`_buildRecordContent` 必须覆盖所有字段**：`database.js` 的 `_buildRecordContent()` 按 type 分支返回 content JSON。新增字段时必须同步更新对应 case，否则 INSERT 时字段丢失。
 - **AI 对话可修改所有病历类型**：`ChatArea.js` 的系统提示词动态获取当前 active type 的 registry 配置，`_tryParseEMR()` 通过 `store.setTypeData(activeType, ...)` 通用路由写入。新增类型时无需改 `_tryParseEMR()`，但需在 `promptTemplates.js` 中配置提示词模板。

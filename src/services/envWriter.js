@@ -3,18 +3,18 @@
  * Reads and updates .env file for model configuration sync.
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const ENV_PATH = path.join(__dirname, '../../.env');
+const ENV_PATH = path.join(__dirname, "../../.env");
 
 // Provider to env variable prefix mapping
 const PROVIDER_PREFIX_MAP = {
-  openai: 'OPENAI',
-  claude: 'CLAUDE',
-  gemini: 'GEMINI',
-  deepseek: 'DEEPSEEK',
-  ollama: 'OLLAMA',
+  openai: "OPENAI",
+  claude: "CLAUDE",
+  gemini: "GEMINI",
+  deepseek: "DEEPSEEK",
+  ollama: "OLLAMA",
 };
 
 // Default .env template (used if file doesn't exist)
@@ -28,6 +28,7 @@ CLAUDE_BASE_URL=https://api.anthropic.com
 CLAUDE_MODEL=claude-sonnet-4-20250514
 
 GEMINI_API_KEY=
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 GEMINI_MODEL=gemini-2.5-flash
 
 DEEPSEEK_API_KEY=
@@ -52,17 +53,17 @@ PORT=8000
 function readEnvFile() {
   if (!fs.existsSync(ENV_PATH)) {
     // Create default .env file if it doesn't exist
-    fs.writeFileSync(ENV_PATH, DEFAULT_ENV_TEMPLATE, 'utf-8');
+    fs.writeFileSync(ENV_PATH, DEFAULT_ENV_TEMPLATE, "utf-8");
   }
 
-  const content = fs.readFileSync(ENV_PATH, 'utf-8');
-  const lines = content.split('\n');
+  const content = fs.readFileSync(ENV_PATH, "utf-8");
+  const lines = content.split("\n");
   const vars = {};
 
   for (const line of lines) {
     const trimmed = line.trim();
     // Skip comments and empty lines
-    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (!trimmed || trimmed.startsWith("#")) continue;
 
     // Parse KEY=VALUE
     const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
@@ -78,8 +79,8 @@ function readEnvFile() {
  * Write .env file from lines array
  */
 function writeEnvFile(lines) {
-  const content = lines.join('\n');
-  fs.writeFileSync(ENV_PATH, content, 'utf-8');
+  const content = lines.join("\n");
+  fs.writeFileSync(ENV_PATH, content, "utf-8");
 }
 
 /**
@@ -101,17 +102,20 @@ function upsertVariable(lines, key, value) {
 
   if (!found) {
     // Find the provider section comment and insert after it
-    const providerPrefix = key.split('_')[0];
+    const providerPrefix = key.split("_")[0];
     let insertIndex = lines.length;
 
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
-      if (trimmed.startsWith(`# ${providerPrefix}`) || trimmed.startsWith(`# ${providerPrefix.toLowerCase()}`)) {
+      if (
+        trimmed.startsWith(`# ${providerPrefix}`) ||
+        trimmed.startsWith(`# ${providerPrefix.toLowerCase()}`)
+      ) {
         // Find the end of this section (next comment or empty line)
         insertIndex = i + 1;
         while (insertIndex < lines.length) {
           const next = lines[insertIndex].trim();
-          if (next.startsWith('#') || next === '') break;
+          if (next.startsWith("#") || next === "") break;
           insertIndex++;
         }
         break;
@@ -151,7 +155,7 @@ function updateEnvConfig(provider, config) {
     }
 
     // Update DEFAULT_PROVIDER
-    upsertVariable(lines, 'DEFAULT_PROVIDER', provider);
+    upsertVariable(lines, "DEFAULT_PROVIDER", provider);
 
     // Write back
     writeEnvFile(lines);
@@ -171,13 +175,13 @@ function getAllEnvConfig() {
 
   for (const [providerName, prefix] of Object.entries(PROVIDER_PREFIX_MAP)) {
     config[providerName] = {
-      apiKey: vars[`${prefix}_API_KEY`] || '',
-      baseUrl: vars[`${prefix}_BASE_URL`] || '',
-      model: vars[`${prefix}_MODEL`] || '',
+      apiKey: vars[`${prefix}_API_KEY`] || "",
+      baseUrl: vars[`${prefix}_BASE_URL`] || "",
+      model: vars[`${prefix}_MODEL`] || "",
     };
   }
 
-  config.defaultProvider = vars['DEFAULT_PROVIDER'] || 'openai';
+  config.defaultProvider = vars["DEFAULT_PROVIDER"] || "openai";
   return config;
 }
 

@@ -10,6 +10,7 @@ import { EmrPreview } from './components/EmrPreview.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
 import { PatientManager } from './components/PatientManager.js';
 import { recordTypeApi } from './services/recordTypeApi.js';
+import { loadDiseaseCategories } from './data/diseases.js';
 
 // ─── Global references for cleanup ───
 let components = [];
@@ -149,6 +150,14 @@ function setupRecordTypesButton() {
   });
 }
 
+// ─── Diseases Button ───
+function setupDiseasesButton() {
+  const btn = document.getElementById('btnDiseases');
+  btn?.addEventListener('click', () => {
+    window.open('/diseases', '_blank');
+  });
+}
+
 // ─── Load Registry from API ───
 async function loadRegistry() {
   try {
@@ -284,6 +293,7 @@ async function init() {
     setupExport();
     setupPromptsButton();
     setupRecordTypesButton();
+    setupDiseasesButton();
     setupPaneDivider();
 
     // Update model badge
@@ -321,8 +331,16 @@ async function init() {
           }
         }
       }
+      // Reload disease categories (may have been edited in /diseases page)
+      const cats = await loadDiseaseCategories();
+      store.setState({ diseaseCategories: cats });
     }
   });
+
+    // Load disease categories from API (must be before DiseaseTree init)
+    const diseaseCategories = await loadDiseaseCategories();
+    store.setState({ diseaseCategories });
+    console.log('[EMR v2] Disease categories loaded:', diseaseCategories.length, 'categories');
 
     // Initialize components
     const diseaseTree = new DiseaseTree(document.getElementById('diseaseTree'));

@@ -1,7 +1,7 @@
 /**
  * DiseaseTree — sidebar disease category browser.
  *
- * Renders DISEASE_CATEGORIES as collapsible <details> groups with
+ * Renders the disease catalog (from store.diseaseCategories) as collapsible <details> groups with
  * color-coded headers.  Clicking a disease triggers EMR generation
  * via api.generateEMR().
  *
@@ -11,7 +11,6 @@
  *   await tree.render();
  */
 import { store } from "../store.js";
-import { DISEASE_CATEGORIES } from "../data/diseases.js";
 import * as api from "../services/api.js";
 import { db } from "../db.js";
 
@@ -24,18 +23,19 @@ export class DiseaseTree {
   }
 
   /**
-   * Full render — rebuilds the tree from DISEASE_CATEGORIES.
+   * Full render — rebuilds the tree from store.diseaseCategories.
    * Call once on app boot.
    */
   async render() {
     this.el.innerHTML = "";
 
+    const categories = store.state.diseaseCategories || [];
     const currentDisease = store.state.currentDisease;
     const query = (store.state.searchQuery || "").toLowerCase();
 
-    for (const cat of DISEASE_CATEGORIES) {
+    for (const cat of categories) {
       const filtered = query
-        ? cat.diseases.filter((d) => d.toLowerCase().includes(query))
+        ? cat.diseases.filter((d) => d.name.toLowerCase().includes(query))
         : cat.diseases;
 
       // Skip empty categories when searching
@@ -45,7 +45,7 @@ export class DiseaseTree {
       details.className = "disease-category";
 
       // Keep open if active or searching
-      if (query || filtered.some((d) => d === currentDisease)) {
+      if (query || filtered.some((d) => d.name === currentDisease)) {
         details.open = true;
       }
 
@@ -64,26 +64,27 @@ export class DiseaseTree {
       for (const disease of filtered) {
         const li = document.createElement("li");
         li.className = "disease-item";
-        if (disease === currentDisease) {
+        li.dataset.diseaseName = disease.name;
+        if (disease.name === currentDisease) {
           li.classList.add("active");
         }
 
         // Highlight matching portion when searching
         if (query) {
-          const idx = disease.toLowerCase().indexOf(query);
+          const idx = disease.name.toLowerCase().indexOf(query);
           if (idx !== -1) {
-            const before = disease.slice(0, idx);
-            const match = disease.slice(idx, idx + query.length);
-            const after = disease.slice(idx + query.length);
+            const before = disease.name.slice(0, idx);
+            const match = disease.name.slice(idx, idx + query.length);
+            const after = disease.name.slice(idx + query.length);
             li.innerHTML = `${before}<mark>${match}</mark>${after}`;
           } else {
-            li.textContent = disease;
+            li.textContent = disease.name;
           }
         } else {
-          li.textContent = disease;
+          li.textContent = disease.name;
         }
 
-        li.addEventListener("click", () => this._onDiseaseClick(disease));
+        li.addEventListener("click", () => this._onDiseaseClick(disease.name));
         ul.appendChild(li);
       }
 
@@ -101,6 +102,13 @@ export class DiseaseTree {
       this._unsub.push(
         store.subscribe("searchQuery", () => {
           // Re-render when search changes (the tree structure changes)
+          this.render();
+        }),
+      );
+
+      this._unsub.push(
+        store.subscribe("diseaseCategories", () => {
+          // Re-render when the catalog is loaded or updated externally
           this.render();
         }),
       );
@@ -328,7 +336,7 @@ export class DiseaseTree {
     const current = store.state.currentDisease;
     const items = this.el.querySelectorAll(".disease-item");
     for (const item of items) {
-      item.classList.toggle("active", item.textContent === current);
+      item.classList.toggle("active", item.dataset.diseaseName === current);
     }
   }
 
