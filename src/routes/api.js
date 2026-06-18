@@ -4,6 +4,7 @@ const promptTemplates = require('../services/promptTemplates');
 const { createRateLimiter } = require('../middleware/rateLimit');
 const { findType, getRegistry } = require('../services/recordRegistry');
 const { mockGenerate } = require('../services/ai-mock');
+const knowledge = require('../services/knowledge');
 
 const router = Router();
 
@@ -155,7 +156,14 @@ async function _generateCore(typeConfig, categoryId, reqBody) {
   if (isMockMode) {
     content = mockGenerate(typeConfig, disease, context);
   } else {
-    const systemPrompt = promptTemplates.assembleSystemPrompt(typeConfig.templateKey, context, typeConfig);
+    let systemPrompt = promptTemplates.assembleSystemPrompt(typeConfig.templateKey, context, typeConfig);
+    // F1: RAG injection — if a knowledge base exists for this disease,
+    // append it to the system prompt so the AI grounds its output in the
+    // domain knowledge (clinical guidelines, key points, etc.)
+    const kb = knowledge.getKnowledge(disease);
+    if (kb.text) {
+      systemPrompt += `\n\n---\n以下是与"${disease}"相关的专业知识库内容，请在生成时严格参考，确保内容符合临床指南：\n${kb.text}`;
+    }
     const userPrompt = promptTemplates.assembleUserPrompt(typeConfig.templateKey, context, typeConfig);
     content = await ai.callAI(provider, model, [
       { role: 'system', content: systemPrompt },

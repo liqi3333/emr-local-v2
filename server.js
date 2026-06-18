@@ -8,6 +8,7 @@ const promptsRouter = require('./src/routes/prompts');
 const recordTypesRouter = require('./src/routes/recordTypes');
 const settingsRouter = require('./src/routes/settings');
 const diseasesRouter = require('./src/routes/diseases');
+const knowledgeRouter = require('./src/routes/knowledge');
 const { ensureDefaultRegistry, migrateLegacyTypes } = require('./src/services/recordRegistry');
 const { ensureDefaultDiseaseCategories } = require('./src/services/diseaseRegistry');
 
@@ -34,6 +35,7 @@ app.use('/api', promptsRouter);
 app.use('/api', recordTypesRouter);
 app.use('/api', settingsRouter);
 app.use('/api', diseasesRouter);
+app.use('/api', knowledgeRouter);
 
 // ── Prompt editor page ──
 app.get('/prompts', (req, res) => {
