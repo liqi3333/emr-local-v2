@@ -5,6 +5,7 @@
 const { Router } = require('express');
 const db = require('../services/database');
 const { findType } = require('../services/recordRegistry');
+const { RECORD_DATA_COLUMNS } = require('../data/recordColumns');
 
 const router = Router();
 
@@ -128,22 +129,12 @@ router.get('/records/:id', (req, res) => {
  */
 router.post('/records', (req, res) => {
   try {
-    const { patientId, disease, type, category,
-      chief, hpi, past, exam, lab, diag, workup, diff, plan, 
-      summary, supplementHistory, diagnosis, analysis, treatment, signed, 
-      chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned, 
-      preopDiagnosis, preopIndication, preopPlan, preopPreparation, preopRisk, preopSigned,
-      discussionParticipants, discussionCaseSummary, discussionDiagnosis, discussionContent, discussionConclusion, discussionSigned,
-      surgeryName, surgerySurgeon, surgeryAssistant, surgeryAnesthesia, surgeryProcess, surgeryFindings, surgerySigned,
-      dischargeAdmissionDate, dischargeDate, dischargeDiagnosis, dischargeTreatment, dischargeOutcome, dischargeAdvice, dischargeSigned,
-      surgeryIndication, surgeryRisks, alternatives, patientSignature, consentDate,
-      bloodType, transfusionReason, bloodProducts, transfusionRisks,
-      anesthesiaType, anesthesiaRisks, patientCondition,
-      admissionTime, vitalSigns, skinCondition, mobility, nutrition, mentalStatus,
-      riskAssessment, nursingDiagnosis, goals, interventions, evaluation,
-      healthEducation, dischargePlan, recordDate, recordTime, intakeOutput,
-      medication, nursingInterventions, nurseSignature,
-      id } = req.body;
+    // A1: only meta fields are explicitly destructured; the 77 data columns
+    // are extracted dynamically from RECORD_DATA_COLUMNS (single source of
+    // truth shared with database.js). Previously each field was hand-listed
+    // in both the destructure and the saveRecord object → adding a field
+    // required editing 3 places.
+    const { patientId, disease, type, category, id } = req.body;
 
     if (!patientId || !disease) {
       return res.status(400).json({ error: 'patientId and disease are required' });
@@ -164,93 +155,23 @@ router.post('/records', (req, res) => {
     const authoritativeCategory = regResult ? regResult.category.id : (category || 'clinicalRecords');
     const typeConfig = regResult ? regResult.type : undefined;
 
-    const recordId = db.saveRecord({
+    // A1: dynamically build the record from RECORD_DATA_COLUMNS.
+    const record = {
       id,
       patientId,
       disease,
       type: resolvedType,
       category: authoritativeCategory,
-      chief: chief || '',
-      hpi: hpi || '',
-      past: past || '',
-      exam: exam || '',
-      lab: lab || '',
-      diag: diag || '',
-      workup: workup || '',
-      diff: diff || '',
-      plan: plan || '',
-      summary: summary || '',
-      supplementHistory: supplementHistory || '',
-      diagnosis: diagnosis || '',
-      analysis: analysis || '',
-      treatment: treatment || '',
-      signed: signed || '',
-      chiefSummary: chiefSummary || '',
-      chiefDiagnosis: chiefDiagnosis || '',
-      chiefAnalysis: chiefAnalysis || '',
-      chiefTreatment: chiefTreatment || '',
-      chiefSigned: chiefSigned || '',
-      preopDiagnosis: preopDiagnosis || '',
-      preopIndication: preopIndication || '',
-      preopPlan: preopPlan || '',
-      preopPreparation: preopPreparation || '',
-      preopRisk: preopRisk || '',
-      preopSigned: preopSigned || '',
-      discussionParticipants: discussionParticipants || '',
-      discussionCaseSummary: discussionCaseSummary || '',
-      discussionDiagnosis: discussionDiagnosis || '',
-      discussionContent: discussionContent || '',
-      discussionConclusion: discussionConclusion || '',
-      discussionSigned: discussionSigned || '',
-      surgeryName: surgeryName || '',
-      surgerySurgeon: surgerySurgeon || '',
-      surgeryAssistant: surgeryAssistant || '',
-      surgeryAnesthesia: surgeryAnesthesia || '',
-      surgeryProcess: surgeryProcess || '',
-      surgeryFindings: surgeryFindings || '',
-      surgerySigned: surgerySigned || '',
-      dischargeAdmissionDate: dischargeAdmissionDate || '',
-      dischargeDate: dischargeDate || '',
-      dischargeDiagnosis: dischargeDiagnosis || '',
-      dischargeTreatment: dischargeTreatment || '',
-      dischargeOutcome: dischargeOutcome || '',
-      dischargeAdvice: dischargeAdvice || '',
-      dischargeSigned: dischargeSigned || '',
-      surgeryIndication: surgeryIndication || '',
-      surgeryRisks: surgeryRisks || '',
-      alternatives: alternatives || '',
-      patientSignature: patientSignature || '',
-      consentDate: consentDate || '',
-      bloodType: bloodType || '',
-      transfusionReason: transfusionReason || '',
-      bloodProducts: bloodProducts || '',
-      transfusionRisks: transfusionRisks || '',
-      anesthesiaType: anesthesiaType || '',
-      anesthesiaRisks: anesthesiaRisks || '',
-      patientCondition: patientCondition || '',
-      admissionTime: admissionTime || '',
-      vitalSigns: vitalSigns || '',
-      skinCondition: skinCondition || '',
-      mobility: mobility || '',
-      nutrition: nutrition || '',
-      mentalStatus: mentalStatus || '',
-      riskAssessment: riskAssessment || '',
-      nursingDiagnosis: nursingDiagnosis || '',
-      goals: goals || '',
-      interventions: interventions || '',
-      evaluation: evaluation || '',
-      healthEducation: healthEducation || '',
-      dischargePlan: dischargePlan || '',
-      recordDate: recordDate || '',
-      recordTime: recordTime || '',
-      intakeOutput: intakeOutput || '',
-      medication: medication || '',
-      nursingInterventions: nursingInterventions || '',
-      nurseSignature: nurseSignature || '',
-    }, typeConfig);
+      ...RECORD_DATA_COLUMNS.reduce((acc, col) => {
+        acc[col] = req.body[col] || '';
+        return acc;
+      }, {}),
+    };
 
-    const record = db.getRecordById(recordId);
-    res.json({ record });
+    const recordId = db.saveRecord(record, typeConfig);
+
+    const saved = db.getRecordById(recordId);
+    res.json({ record: saved });
   } catch (err) {
     console.error('[POST /api/records]', err.message);
     res.status(500).json({ error: err.message });
