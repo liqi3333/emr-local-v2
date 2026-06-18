@@ -164,11 +164,27 @@ async function _generateCore(typeConfig, categoryId, reqBody) {
     if (kb.text) {
       systemPrompt += `\n\n---\n以下是与"${disease}"相关的专业知识库内容，请在生成时严格参考，确保内容符合临床指南：\n${kb.text}`;
     }
+
+    // F2: RAG auto-routing — when enabled and a KB exists, route to a small
+    // local model (e.g. Ollama qwen2.5:1.5b) to save tokens. Only triggers
+    // when the caller didn't explicitly choose a provider (user choice wins).
+    let useProvider = provider;
+    let useModel = model;
+    let useApiKey = apiKey;
+    let useBaseUrl = baseUrl;
+    if (process.env.RAG_AUTO_ROUTE === 'true' && kb.text && !provider) {
+      useProvider = process.env.RAG_SMALL_PROVIDER || 'ollama';
+      useModel = process.env.RAG_SMALL_MODEL || undefined; // fall back to ai.js default
+      // ai.callAI will read OLLAMA_* env for apiKey/baseUrl when provider=ollama
+      useApiKey = undefined;
+      useBaseUrl = undefined;
+    }
+
     const userPrompt = promptTemplates.assembleUserPrompt(typeConfig.templateKey, context, typeConfig);
-    content = await ai.callAI(provider, model, [
+    content = await ai.callAI(useProvider, useModel, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
-    ], apiKey, baseUrl);
+    ], useApiKey, useBaseUrl);
   }
 
   // Try to parse JSON response
