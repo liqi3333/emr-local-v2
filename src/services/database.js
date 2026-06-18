@@ -120,24 +120,8 @@ class EMRDatabase {
       CREATE INDEX IF NOT EXISTS idx_records_patient_id ON records(patientId);
       CREATE INDEX IF NOT EXISTS idx_records_disease ON records(disease);
       CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(createdAt);
-      CREATE INDEX IF NOT EXISTS idx_records_type ON records(type);
-      CREATE INDEX IF NOT EXISTS idx_records_category ON records(category);
       CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(createdAt);
     `);
-
-    // B4 fix: derive ALTER columns from RECORD_DATA_COLUMNS (single source of
-    // truth) instead of a hardcoded duplicate list. Uses PRAGMA table_info to
-    // detect which columns already exist, so this is idempotent and works for
-    // both brand-new and legacy databases. Eliminates the maintenance burden
-    // of keeping two lists in sync (previously 31 columns duplicated).
-    const existingCols = new Set(
-      this._db.prepare('PRAGMA table_info(records)').all().map(c => c.name)
-    );
-    const newColumns = RECORD_DATA_COLUMNS.filter(c => !existingCols.has(c));
-    for (const col of newColumns) {
-      _validateIdent(col);
-      this._db.exec(`ALTER TABLE records ADD COLUMN ${col} TEXT DEFAULT ''`);
-    }
 
     this._db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -146,15 +130,85 @@ class EMRDatabase {
         updatedAt TEXT NOT NULL
       );
     `);
-    // category column has a non-empty default; not in RECORD_DATA_COLUMNS so
-    // handled separately from the generic loop above.
-    try {
-      this._db.exec("ALTER TABLE records ADD COLUMN category TEXT DEFAULT 'clinicalRecords'");
-    } catch { /* column already exists */ }
+
+    // P2: column additions, category backfill, and type/category indexes
+    // are now handled by versioned migrations (v1) in _runMigrations() below.
     // Backfill category for legacy records
     try {
       this._db.exec("UPDATE records SET category = 'clinicalRecords' WHERE category IS NULL OR category = ''");
     } catch { /* ignore */ }
+
+    // P2: versioned migrations. The base CREATE TABLE IF NOT EXISTS above
+    // plus the B4 PRAGMA-driven ALTER loop already bring any DB to the
+    // current schema idempotently. The schema_version table records which
+    // migrations have run, so future schema changes can be added as new
+    // versioned steps without re-running everything on every boot. Each
+    // migration runs inside a transaction; a crash mid-migration leaves the
+    // version untouched so it re-runs cleanly.
+    this._runMigrations();
+  }
+
+  /** Versioned migration runner. Each migration is a function executed in a
+   *  transaction; on success its version is recorded in schema_version. */
+  _runMigrations() {
+    this._db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_version (
+        version INTEGER PRIMARY KEY,
+        appliedAt TEXT NOT NULL
+      );
+    `);
+    const applied = new Set(
+      this._db.prepare('SELECT version FROM schema_version').all().map(r => r.version)
+    );
+    const migrations = this._migrations();
+    const setVersion = this._db.prepare(
+      'INSERT INTO schema_version (version, appliedAt) VALUES (?, ?)'
+    );
+    for (const m of migrations) {
+      if (applied.has(m.version)) continue;
+      const tx = this._db.transaction(() => {
+        m.run(this._db);
+        setVersion.run(m.version, new Date().toISOString());
+      });
+      tx();
+    }
+  }
+
+  /** Migration definitions. v1 is the baseline that captures the schema as
+   *  it existed before versioning (additive ALTERs + indexes). Existing DBs
+   *  that predate this system will run v1 once to get recorded; brand-new DBs
+   *  also run v1 (ALTERs are no-ops since columns already exist in CREATE
+   *  TABLE, indexes are IF NOT EXISTS). Future schema changes append here. */
+  _migrations() {
+    return [
+      {
+        version: 1,
+        run: (db) => {
+          // Add any RECORD_DATA_COLUMNS missing from the table (B4 logic,
+          // now inside a transaction).
+          const existingCols = new Set(
+            db.prepare('PRAGMA table_info(records)').all().map(c => c.name)
+          );
+          for (const col of RECORD_DATA_COLUMNS) {
+            if (!existingCols.has(col)) {
+              _validateIdent(col);
+              db.exec(`ALTER TABLE records ADD COLUMN ${col} TEXT DEFAULT ''`);
+            }
+          }
+          // category column (non-empty default, not in RECORD_DATA_COLUMNS)
+          if (!existingCols.has('category')) {
+            db.exec("ALTER TABLE records ADD COLUMN category TEXT DEFAULT 'clinicalRecords'");
+          }
+          // Backfill category for legacy records
+          db.exec("UPDATE records SET category = 'clinicalRecords' WHERE category IS NULL OR category = ''");
+          // Indexes (IF NOT EXISTS so safe to re-run)
+          db.exec(`
+            CREATE INDEX IF NOT EXISTS idx_records_type ON records(type);
+            CREATE INDEX IF NOT EXISTS idx_records_category ON records(category);
+          `);
+        },
+      },
+    ];
   }
 
   _ensureSampleData() {
