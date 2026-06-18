@@ -49,6 +49,7 @@ export class EmrPreview {
   constructor(containerEl) {
     this.el = containerEl;
     this._unsub = [];
+    this._dataUnsub = null;  // subscription for the active type's storeKey
   }
 
   render() {
@@ -59,21 +60,35 @@ export class EmrPreview {
   destroy() {
     this._unsub.forEach(fn => fn());
     this._unsub = [];
+    if (this._dataUnsub) { this._dataUnsub(); this._dataUnsub = null; }
   }
 
   _subscribe() {
-    const keys = [
-      'emrData', 'attendingData', 'chiefData', 'preopData',
-      'discussionData', 'surgeryData', 'dischargeData',
-      'surgeryConsentData', 'bloodTransfusionConsentData', 'anesthesiaConsentData',
-      'nursingAssessmentData', 'nursingPlanData', 'nursingRecordSheetData',
-      'currentDisease', 'loading', 'activeType',
-    ];
-    for (const key of keys) {
-      this._unsub.push(store.subscribe(key, () => this._renderActiveType()));
-    }
+    // A5: instead of hardcoding 13 storeKeys, subscribe to activeType changes
+    // and dynamically (re)subscribe to the current active type's storeKey.
+    // This covers custom types added via RecordTypeManager whose storeKey
+    // would never be in a hardcoded list.
+    this._unsub.push(store.subscribe('activeType', () => this._resubscribeDataKey()));
+    this._unsub.push(store.subscribe('currentDisease', () => this._renderActiveType()));
+    this._unsub.push(store.subscribe('loading', () => this._renderActiveType()));
     // Re-render when registry changes (fields may have been toggled)
-    this._unsub.push(store.subscribe('recordRegistry', () => this._renderActiveType()));
+    this._unsub.push(store.subscribe('recordRegistry', () => {
+      this._resubscribeDataKey();
+      this._renderActiveType();
+    }));
+    // Initial subscription for whichever type is active at boot
+    this._resubscribeDataKey();
+  }
+
+  /** (Re)subscribe to the active type's storeKey so editing its fields
+   *  triggers a re-render. Called on activeType/registry changes. */
+  _resubscribeDataKey() {
+    if (this._dataUnsub) { this._dataUnsub(); this._dataUnsub = null; }
+    const activeType = store.state.activeType;
+    const typeConfig = store.getTypeConfig(activeType);
+    if (typeConfig && typeConfig.storeKey) {
+      this._dataUnsub = store.subscribe(typeConfig.storeKey, () => this._renderActiveType());
+    }
   }
 
   _renderActiveType() {
