@@ -95,12 +95,13 @@ router.delete('/patients/:id', (req, res) => {
 // ──────────────────────────────────────────────
 
 /**
- * GET /api/records - Get all records (optionally filter by patientId)
+ * GET /api/records - Get records with optional filters
+ * Query params: patientId, type, category, limit, offset (all optional)
  */
 router.get('/records', (req, res) => {
   try {
-    const { patientId } = req.query;
-    const records = db.getRecords(patientId);
+    const { patientId, type, category, limit, offset } = req.query;
+    const records = db.getRecords(patientId, { type, category, limit, offset });
     res.json({ records });
   } catch (err) {
     console.error('[GET /api/records]', err.message);

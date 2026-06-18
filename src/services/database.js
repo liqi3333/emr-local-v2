@@ -235,13 +235,32 @@ class EMRDatabase {
 
   // ─── EMR Records ───
 
-  getRecords(patientId) {
-    if (patientId) {
-      return this._db.prepare(
-        'SELECT * FROM records WHERE patientId = ? ORDER BY createdAt DESC'
-      ).all(patientId);
+  // P1: server-side filtering + pagination. Backward compatible — calling
+  // getRecords(patientId) with no options behaves exactly as before (SELECT *
+  // all rows for that patient). opts.type / opts.category add WHERE filters;
+  // opts.limit / opts.offset add pagination. Values are parameterized (safe).
+  getRecords(patientId, opts = {}) {
+    const where = [];
+    const params = [];
+    if (patientId) { where.push('patientId = ?'); params.push(patientId); }
+    if (opts.type) { where.push('type = ?'); params.push(opts.type); }
+    if (opts.category) { where.push('category = ?'); params.push(opts.category); }
+    let sql = 'SELECT * FROM records';
+    if (where.length > 0) sql += ' WHERE ' + where.join(' AND ');
+    sql += ' ORDER BY createdAt DESC';
+    if (opts.limit) {
+      const limit = parseInt(opts.limit, 10);
+      if (Number.isFinite(limit) && limit > 0) {
+        sql += ' LIMIT ?';
+        params.push(limit);
+        const offset = parseInt(opts.offset, 10);
+        if (Number.isFinite(offset) && offset > 0) {
+          sql += ' OFFSET ?';
+          params.push(offset);
+        }
+      }
     }
-    return this._db.prepare('SELECT * FROM records ORDER BY createdAt DESC').all();
+    return this._db.prepare(sql).all(...params);
   }
 
   getRecordById(id) {
