@@ -16,26 +16,8 @@ if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
-// Single source of truth for record columns — add new columns here only
-// INSERT/UPDATE SQL is auto-generated from this array
-const RECORD_DATA_COLUMNS = [
-  'chief', 'hpi', 'past', 'exam', 'lab', 'diag', 'diff', 'plan', 'workup',
-  'summary', 'supplementHistory', 'diagnosis', 'analysis', 'treatment', 'signed',
-  'chiefSummary', 'chiefDiagnosis', 'chiefAnalysis', 'chiefTreatment', 'chiefSigned',
-  'preopDiagnosis', 'preopIndication', 'preopPlan', 'preopPreparation', 'preopRisk', 'preopSigned',
-  'discussionParticipants', 'discussionCaseSummary', 'discussionDiagnosis', 'discussionContent', 'discussionConclusion', 'discussionSigned',
-  'surgeryName', 'surgerySurgeon', 'surgeryAssistant', 'surgeryAnesthesia', 'surgeryProcess', 'surgeryFindings', 'surgerySigned',
-  'dischargeAdmissionDate', 'dischargeDate', 'dischargeDiagnosis', 'dischargeTreatment', 'dischargeOutcome', 'dischargeAdvice', 'dischargeSigned',
-  // Consent forms
-  'surgeryIndication', 'surgeryRisks', 'alternatives', 'patientSignature', 'consentDate',
-  'bloodType', 'transfusionReason', 'bloodProducts', 'transfusionRisks',
-  'anesthesiaType', 'anesthesiaRisks', 'patientCondition',
-  // Nursing records
-  'admissionTime', 'vitalSigns', 'skinCondition', 'mobility', 'nutrition', 'mentalStatus',
-  'riskAssessment', 'nursingDiagnosis', 'goals', 'interventions', 'evaluation',
-  'healthEducation', 'dischargePlan', 'recordDate', 'recordTime', 'intakeOutput',
-  'medication', 'nursingInterventions', 'nurseSignature',
-];
+const { RECORD_DATA_COLUMNS } = require('../data/recordColumns');
+
 
 class EMRDatabase {
   constructor() {
