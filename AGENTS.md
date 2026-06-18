@@ -56,7 +56,8 @@ lsof -ti:8000 | xargs kill -9
 
 ## 注意事项
 
-- **Registry 存储在 SQLite**：Registry 数据存储在 `settings` 表（key `record_registry`），而非 JSON 文件。服务启动时 `server.js:49-50` 调用 `ensureDefaultRegistry()` + `migrateLegacyTypes()` 初始化。
+- **Registry 存储在 SQLite**：Registry 数据存储在 `settings` 表（key `record_registry`），而非 JSON 文件。服务启动时 `server.js:59-60` 调用 `ensureDefaultRegistry()` + `migrateLegacyTypes()` 初始化。
+- **Disease 目录同样在 SQLite**：`ensureDefaultDiseaseCategories()` 在 `server.js:61` 初始化，存储于 `settings` 表（key `disease_categories`）。
 - **`RECORD_DATA_COLUMNS` 是权威来源**：`saveRecord()` 从该数组动态生成 SQL。不要手动数 `?` 占位符或硬编码列数。
 - **`content` 列仅 INSERT 时写入**：`saveRecord()` 在 INSERT 时写入 `content` JSON（由 `_buildRecordContent` 生成），UPDATE 时不会更新该列。新增字段后旧记录的 `content` 仍保持旧值。
 - **模板缓存清理**：`src/routes/api.js` 中的模板路由使用 `delete require.cache[require.resolve('../data/templates')]` 确保加载最新模板。修改 `templates.js` 后 `npm run dev` 会自动重启，但 `npm start` 不会热重载。
