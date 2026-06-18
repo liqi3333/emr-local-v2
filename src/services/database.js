@@ -109,6 +109,8 @@ class EMRDatabase {
       CREATE INDEX IF NOT EXISTS idx_records_patient_id ON records(patientId);
       CREATE INDEX IF NOT EXISTS idx_records_disease ON records(disease);
       CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(createdAt);
+      CREATE INDEX IF NOT EXISTS idx_records_type ON records(type);
+      CREATE INDEX IF NOT EXISTS idx_records_category ON records(category);
       CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(createdAt);
     `);
 
