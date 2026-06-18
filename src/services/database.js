@@ -18,6 +18,17 @@ if (!fs.existsSync(DB_DIR)) {
 
 const { RECORD_DATA_COLUMNS } = require('../data/recordColumns');
 
+// P3: validate SQL identifiers before interpolation. Current sources are
+// hardcoded arrays (safe), but this guards against future dynamic column
+// names from Registry input. Fail-closed: throws on any non-conforming char.
+const _IDENT_RE = /^[a-zA-Z0-9_]+$/;
+function _validateIdent(name) {
+  if (typeof name !== 'string' || !_IDENT_RE.test(name)) {
+    throw new Error(`Invalid SQL identifier: ${JSON.stringify(name)}`);
+  }
+  return name;
+}
+
 
 class EMRDatabase {
   constructor() {
@@ -124,6 +135,7 @@ class EMRDatabase {
     );
     const newColumns = RECORD_DATA_COLUMNS.filter(c => !existingCols.has(c));
     for (const col of newColumns) {
+      _validateIdent(col);
       this._db.exec(`ALTER TABLE records ADD COLUMN ${col} TEXT DEFAULT ''`);
     }
 
@@ -259,7 +271,7 @@ class EMRDatabase {
       // records).
       const setClauses = [
         'disease = ?', 'type = ?', 'category = ?', 'content = ?',
-        ...RECORD_DATA_COLUMNS.map(c => `${c} = ?`),
+        ...RECORD_DATA_COLUMNS.map(c => `${_validateIdent(c)} = ?`),
         'updatedAt = ?'
       ];
       const params = [
@@ -274,6 +286,7 @@ class EMRDatabase {
       this._db.prepare(`UPDATE records SET ${setClauses.join(', ')} WHERE id = ?`).run(...params);
     } else {
       const insertCols = ['id', 'patientId', 'disease', 'type', 'category', 'content', ...RECORD_DATA_COLUMNS, 'createdAt', 'updatedAt'];
+      insertCols.forEach(_validateIdent);
       const placeholders = insertCols.map(() => '?').join(', ');
       const params = [
         id,
