@@ -69,10 +69,34 @@ class Store {
       recordRegistry: this._state.recordRegistry,
       diseaseCategories: this._state.diseaseCategories,
     };
+
+    // A6 fix: dynamically clear ALL type storeKeys from registry.
+    // Previously only emrData was reset, leaving attendingData/chiefData/
+    // preopData/discussionData/surgeryData/dischargeData + 6 consent/nursing
+    // slots residual → wrong-patient documentation risk on patient switch.
+    const dataSlots = {};
+    const reg = this._state.recordRegistry;
+    if (reg && Array.isArray(reg.categories)) {
+      for (const cat of reg.categories) {
+        for (const t of cat.types) {
+          if (t.storeKey) dataSlots[t.storeKey] = null;
+        }
+      }
+    }
+    // Fallback: if registry not loaded yet, clear known legacy slots
+    if (Object.keys(dataSlots).length === 0) {
+      [
+        'emrData', 'attendingData', 'chiefData', 'preopData',
+        'discussionData', 'surgeryData', 'dischargeData',
+        'surgeryConsentData', 'bloodTransfusionConsentData', 'anesthesiaConsentData',
+        'nursingAssessmentData', 'nursingPlanData', 'nursingRecordSheetData',
+      ].forEach(k => { dataSlots[k] = null; });
+    }
+
     this._state = {
       currentPatient: null,
       currentDisease: null,
-      emrData: null,
+      ...dataSlots,
       chatMessages: [],
       loading: false,
       loadingLabel: '',
@@ -85,6 +109,34 @@ class Store {
       ...keep,
     };
     this._notify(Object.keys(this._state), prevState);
+  }
+
+  /**
+   * Clear ALL type data slots (emrData, attendingData, ...) while keeping
+   * currentPatient, registry, patients list, etc.
+   * Used when switching patients to prevent wrong-patient residual data (A6).
+   */
+  clearAllTypeData() {
+    const prevState = { ...this._state };
+    const slots = {};
+    const reg = this._state.recordRegistry;
+    if (reg && Array.isArray(reg.categories)) {
+      for (const cat of reg.categories) {
+        for (const t of cat.types) {
+          if (t.storeKey) slots[t.storeKey] = null;
+        }
+      }
+    }
+    if (Object.keys(slots).length === 0) {
+      [
+        'emrData', 'attendingData', 'chiefData', 'preopData',
+        'discussionData', 'surgeryData', 'dischargeData',
+        'surgeryConsentData', 'bloodTransfusionConsentData', 'anesthesiaConsentData',
+        'nursingAssessmentData', 'nursingPlanData', 'nursingRecordSheetData',
+      ].forEach(k => { slots[k] = null; });
+    }
+    this._state = { ...this._state, ...slots };
+    this._notify(Object.keys(slots), prevState);
   }
 
   /**
@@ -142,6 +194,13 @@ class Store {
   setTypeData(typeId, data) {
     const typeConfig = this.getTypeConfig(typeId);
     if (typeConfig) {
+      // A6: stamp current patient id on data for cross-patient save guard.
+      // _patientId is a client-only marker; it is never sent to the backend
+      // (EmrPreview._saveRecord builds the record by iterating registry
+      // fields only, so this key stays in memory).
+      if (data && typeof data === 'object' && this._state.currentPatient?.id) {
+        data = { ...data, _patientId: this._state.currentPatient.id };
+      }
       this.setState({ [typeConfig.storeKey]: data });
     }
   }

@@ -185,6 +185,8 @@ export class PatientManager {
         const id = await db.savePatient(patientData);
         const newPatient = { id, ...patientData };
         const patients = await db.getPatients();
+        // A6: clear residual type data from previous patient before switching
+        store.clearAllTypeData();
         store.setState({ patients, currentPatient: newPatient });
         this._syncFormToStore();
         close();
@@ -372,7 +374,11 @@ export class PatientManager {
     const selectPatient = async (id) => {
       const patient = patients.find(p => p.id === id);
       if (patient) {
-        store.setState({ currentPatient: patient, emrData: null });
+        // A6 fix: clear ALL type data slots on patient switch.
+        // Previously only emrData was cleared, leaving attendingData,
+        // surgeryData, etc. residual → wrong-patient documentation risk.
+        store.clearAllTypeData();
+        store.setState({ currentPatient: patient });
         this._syncFormToStore();
         close();
         store.toast('success', `已选择「${patient.name}」`);
@@ -405,6 +411,8 @@ export class PatientManager {
             await db.deletePatient(id);
             if (store.state.currentPatient?.id === id) {
               const remaining = patients.filter(p => p.id !== id);
+              // A6: clear residual type data before switching to another patient
+              store.clearAllTypeData();
               store.setState({ currentPatient: remaining[0] || null });
               this._syncFormToStore();
             }

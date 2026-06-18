@@ -271,6 +271,15 @@ export class EmrPreview {
         return;
       }
 
+      // A6: block saving data that belongs to a different patient.
+      // _patientId is stamped by store.setTypeData(); if residual data from
+      // a previous patient somehow survives, this prevents wrong-patient
+      // documentation (a serious medical-legal adverse event).
+      if (data._patientId && patient?.id && data._patientId !== patient.id) {
+        store.toast('error', '数据与当前患者不匹配，请重新选择患者后再保存');
+        return;
+      }
+
       // Build record with type-specific fields
       const record = {
         patientId: patient.id,

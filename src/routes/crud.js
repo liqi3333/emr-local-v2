@@ -4,6 +4,7 @@
 
 const { Router } = require('express');
 const db = require('../services/database');
+const { findType } = require('../services/recordRegistry');
 
 const router = Router();
 
@@ -127,7 +128,7 @@ router.get('/records/:id', (req, res) => {
  */
 router.post('/records', (req, res) => {
   try {
-    const { patientId, disease, type, 
+    const { patientId, disease, type, category,
       chief, hpi, past, exam, lab, diag, workup, diff, plan, 
       summary, supplementHistory, diagnosis, analysis, treatment, signed, 
       chiefSummary, chiefDiagnosis, chiefAnalysis, chiefTreatment, chiefSigned, 
@@ -154,11 +155,21 @@ router.post('/records', (req, res) => {
       return res.status(404).json({ error: 'Patient not found' });
     }
 
+    // B1+B3: look up registry for authoritative category and typeConfig.
+    // Falls back to body.category / undefined typeConfig if type not in
+    // registry (e.g. legacy type deleted from registry) — preserves backward
+    // compat so old records can still be saved.
+    const resolvedType = type || 'firstCourse';
+    const regResult = findType(resolvedType);
+    const authoritativeCategory = regResult ? regResult.category.id : (category || 'clinicalRecords');
+    const typeConfig = regResult ? regResult.type : undefined;
+
     const recordId = db.saveRecord({
       id,
       patientId,
       disease,
-      type: type || 'firstCourse',
+      type: resolvedType,
+      category: authoritativeCategory,
       chief: chief || '',
       hpi: hpi || '',
       past: past || '',
@@ -236,7 +247,7 @@ router.post('/records', (req, res) => {
       medication: medication || '',
       nursingInterventions: nursingInterventions || '',
       nurseSignature: nurseSignature || '',
-    });
+    }, typeConfig);
 
     const record = db.getRecordById(recordId);
     res.json({ record });

@@ -276,14 +276,23 @@ class EMRDatabase {
       : this._buildRecordContent(record);
 
     if (existing) {
+      // B1: update category too (previously only INSERT wrote category,
+      // UPDATE left the old value → editing a misclassified record could
+      // never be corrected).
+      // B2: update content JSON so the snapshot stays consistent with the
+      // column data (previously content was frozen at INSERT time →
+      // history/export showed stale data, a medical-legal risk for surgery
+      // records).
       const setClauses = [
-        'disease = ?', 'type = ?',
+        'disease = ?', 'type = ?', 'category = ?', 'content = ?',
         ...RECORD_DATA_COLUMNS.map(c => `${c} = ?`),
         'updatedAt = ?'
       ];
       const params = [
         record.disease,
         record.type || 'firstCourse',
+        record.category || 'clinicalRecords',
+        JSON.stringify(content),
         ...dataValues,
         now,
         id
