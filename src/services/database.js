@@ -130,20 +130,17 @@ class EMRDatabase {
       CREATE INDEX IF NOT EXISTS idx_patients_created_at ON patients(createdAt);
     `);
 
-    // Add new columns for consent/nursing records (safe to run multiple times)
-    const newColumns = [
-      'surgeryIndication', 'surgeryRisks', 'alternatives', 'patientSignature', 'consentDate',
-      'bloodType', 'transfusionReason', 'bloodProducts', 'transfusionRisks',
-      'anesthesiaType', 'anesthesiaRisks', 'patientCondition',
-      'admissionTime', 'vitalSigns', 'skinCondition', 'mobility', 'nutrition', 'mentalStatus',
-      'riskAssessment', 'nursingDiagnosis', 'goals', 'interventions', 'evaluation',
-      'healthEducation', 'dischargePlan', 'recordDate', 'recordTime', 'intakeOutput',
-      'medication', 'nursingInterventions', 'nurseSignature',
-    ];
+    // B4 fix: derive ALTER columns from RECORD_DATA_COLUMNS (single source of
+    // truth) instead of a hardcoded duplicate list. Uses PRAGMA table_info to
+    // detect which columns already exist, so this is idempotent and works for
+    // both brand-new and legacy databases. Eliminates the maintenance burden
+    // of keeping two lists in sync (previously 31 columns duplicated).
+    const existingCols = new Set(
+      this._db.prepare('PRAGMA table_info(records)').all().map(c => c.name)
+    );
+    const newColumns = RECORD_DATA_COLUMNS.filter(c => !existingCols.has(c));
     for (const col of newColumns) {
-      try {
-        this._db.exec(`ALTER TABLE records ADD COLUMN ${col} TEXT DEFAULT ''`);
-      } catch { /* column already exists */ }
+      this._db.exec(`ALTER TABLE records ADD COLUMN ${col} TEXT DEFAULT ''`);
     }
 
     this._db.exec(`
@@ -153,15 +150,8 @@ class EMRDatabase {
         updatedAt TEXT NOT NULL
       );
     `);
-    // Add workup column for existing databases
-    try {
-      this._db.exec('ALTER TABLE records ADD COLUMN workup TEXT DEFAULT \'\'');
-    } catch { /* column already exists */ }
-    // Add supplementHistory column for existing databases
-    try {
-      this._db.exec('ALTER TABLE records ADD COLUMN supplementHistory TEXT DEFAULT \'\'');
-    } catch { /* column already exists */ }
-    // Add category column for existing databases
+    // category column has a non-empty default; not in RECORD_DATA_COLUMNS so
+    // handled separately from the generic loop above.
     try {
       this._db.exec("ALTER TABLE records ADD COLUMN category TEXT DEFAULT 'clinicalRecords'");
     } catch { /* column already exists */ }
