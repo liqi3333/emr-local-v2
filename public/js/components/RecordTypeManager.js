@@ -50,6 +50,8 @@ export class RecordTypeManager {
   }
 
   async _save() {
+    // A7: cancel any pending debounced save to avoid double-PUT
+    if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
     this._setLoading(true);
     try {
       await recordTypeApi.saveRegistry(this._state.registry);
@@ -58,6 +60,26 @@ export class RecordTypeManager {
       this._toast('error', '保存失败: ' + err.message);
     } finally {
       this._setLoading(false);
+    }
+  }
+
+  // A7: debounced save for rapid micro-edits (move up/down, toggle).
+  // Coalesces multiple changes within 300ms into a single PUT request.
+  // Structural ops (add/delete) still use _save() directly for immediacy.
+  _scheduleSave() {
+    if (this._saveTimer) clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(async () => {
+      this._saveTimer = null;
+      await this._save();
+    }, 300);
+  }
+
+  /** Flush any pending debounced save (call before navigation/destroy). */
+  _flushPendingSave() {
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer);
+      this._saveTimer = null;
+      this._save();
     }
   }
 
@@ -323,6 +345,10 @@ export class RecordTypeManager {
         fileInput.value = '';
       });
     }
+
+    // A7: flush pending debounced save when leaving the page (the "返回首页"
+    // link navigates away; without this the last micro-edit could be lost).
+    window.addEventListener('pagehide', () => this._flushPendingSave());
   }
 
   async _handleAction(action, id, key) {
@@ -365,7 +391,7 @@ export class RecordTypeManager {
               t.enabled = false;
             }
           }
-          await this._save();
+          this._scheduleSave();
           this._renderCategories();
           this._renderTypes();
         }
@@ -419,7 +445,7 @@ export class RecordTypeManager {
         const type = cat?.types.find(t => t.id === id);
         if (type) {
           type.enabled = !type.enabled;
-          await this._save();
+          this._scheduleSave();
           this._renderTypes();
         }
         break;
@@ -476,7 +502,7 @@ export class RecordTypeManager {
         const field = type.fields.find(f => f.key === key);
         if (field) {
           field.enabled = field.enabled === false ? true : false;
-          await this._save();
+          this._scheduleSave();
           this._renderFields();
         }
         break;
@@ -496,7 +522,7 @@ export class RecordTypeManager {
         const idx = type.fields.findIndex(f => f.key === key);
         if (idx > 0) {
           [type.fields[idx - 1], type.fields[idx]] = [type.fields[idx], type.fields[idx - 1]];
-          await this._save();
+          this._scheduleSave();
           this._renderFields();
         }
         break;
@@ -507,7 +533,7 @@ export class RecordTypeManager {
         const idx = type.fields.findIndex(f => f.key === key);
         if (idx < type.fields.length - 1) {
           [type.fields[idx], type.fields[idx + 1]] = [type.fields[idx + 1], type.fields[idx]];
-          await this._save();
+          this._scheduleSave();
           this._renderFields();
         }
         break;
@@ -518,7 +544,7 @@ export class RecordTypeManager {
         const idx = registry.categories.findIndex(c => c.id === id);
         if (idx > 0) {
           [registry.categories[idx - 1], registry.categories[idx]] = [registry.categories[idx], registry.categories[idx - 1]];
-          await this._save();
+          this._scheduleSave();
           this._renderAll();
         }
         break;
@@ -529,7 +555,7 @@ export class RecordTypeManager {
         const idx = registry.categories.findIndex(c => c.id === id);
         if (idx < registry.categories.length - 1) {
           [registry.categories[idx], registry.categories[idx + 1]] = [registry.categories[idx + 1], registry.categories[idx]];
-          await this._save();
+          this._scheduleSave();
           this._renderAll();
         }
         break;
@@ -540,7 +566,7 @@ export class RecordTypeManager {
         const idx = cat.types.findIndex(t => t.id === id);
         if (idx > 0) {
           [cat.types[idx - 1], cat.types[idx]] = [cat.types[idx], cat.types[idx - 1]];
-          await this._save();
+          this._scheduleSave();
           this._renderAll();
         }
         break;
@@ -551,7 +577,7 @@ export class RecordTypeManager {
         const idx = cat.types.findIndex(t => t.id === id);
         if (idx < cat.types.length - 1) {
           [cat.types[idx], cat.types[idx + 1]] = [cat.types[idx + 1], cat.types[idx]];
-          await this._save();
+          this._scheduleSave();
           this._renderAll();
         }
         break;
