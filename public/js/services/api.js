@@ -97,231 +97,11 @@ export async function chatStream(messages, onChunk, overrides = {}) {
   return _readSSEStream(res, onChunk);
 }
 
-/**
- * Get preop summary template for a disease.
- * @param {string} disease
- * @returns {Promise<{template: object|null}>}
- */
-export async function getPreopTemplate(disease) {
-  const res = await fetchWithTimeout(`${BASE}/templates/preop/${encodeURIComponent(disease)}`, {}, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Generate structured EMR for a disease (non-streaming).
- * @param {string} disease
- * @param {object} [patientInfo]
- * @param {object} [overrides]
- * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
- */
-export async function generateEMR(disease, patientInfo = {}, overrides = {}) {
-  const cfg = getModelConfig();
-  const res = await fetchWithTimeout(`${BASE}/emr/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      disease,
-      patientInfo,
-      provider: overrides.provider || cfg?.provider,
-      model: overrides.model || cfg?.model,
-      apiKey: overrides.apiKey || cfg?.apiKey,
-      baseUrl: overrides.baseUrl || cfg?.baseUrl,
-    }),
-  }, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Generate structured attending round record (non-streaming).
- * @param {string} disease
- * @param {object} [patientInfo]
- * @param {object} [overrides]
- * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
- */
-export async function generateAttendingRound(disease, patientInfo = {}, emrData = {}, overrides = {}) {
-  const cfg = getModelConfig();
-  const res = await fetchWithTimeout(`${BASE}/attending/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      disease,
-      patientInfo,
-      emrData,
-      provider: overrides.provider || cfg?.provider,
-      model: overrides.model || cfg?.model,
-      apiKey: overrides.apiKey || cfg?.apiKey,
-      baseUrl: overrides.baseUrl || cfg?.baseUrl,
-    }),
-  }, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-export async function generateChiefRound(disease, patientInfo = {}, emrData = {}, attendingData = {}, overrides = {}) {
-  const cfg = getModelConfig();
-  const res = await fetchWithTimeout(`${BASE}/chief/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      disease,
-      patientInfo,
-      emrData,
-      attendingData,
-      provider: overrides.provider || cfg?.provider,
-      model: overrides.model || cfg?.model,
-      apiKey: overrides.apiKey || cfg?.apiKey,
-      baseUrl: overrides.baseUrl || cfg?.baseUrl,
-    }),
-  }, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Generate structured preop summary (术前小结).
- * @param {string} disease
- * @param {object} [patientInfo]
- * @param {object} [emrData]
- * @param {object} [attendingData]
- * @param {object} [overrides]
- * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
- */
-export async function generatePreop(disease, patientInfo = {}, emrData = {}, attendingData = {}, overrides = {}) {
-  const cfg = getModelConfig();
-  const res = await fetchWithTimeout(`${BASE}/preop/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      disease,
-      patientInfo,
-      emrData,
-      attendingData,
-      provider: overrides.provider || cfg?.provider,
-      model: overrides.model || cfg?.model,
-      apiKey: overrides.apiKey || cfg?.apiKey,
-      baseUrl: overrides.baseUrl || cfg?.baseUrl,
-    }),
-  }, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Generate structured preop discussion (术前讨论).
- * @param {string} disease
- * @param {object} [patientInfo]
- * @param {object} [emrData]
- * @param {object} [attendingData]
- * @param {object} [preopData]
- * @param {object} [overrides]
- * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
- */
-export async function generateDiscussion(disease, patientInfo = {}, emrData = {}, attendingData = {}, preopData = {}, overrides = {}) {
-  const cfg = getModelConfig();
-  const res = await fetchWithTimeout(`${BASE}/discussion/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      disease,
-      patientInfo,
-      emrData,
-      attendingData,
-      preopData,
-      provider: overrides.provider || cfg?.provider,
-      model: overrides.model || cfg?.model,
-      apiKey: overrides.apiKey || cfg?.apiKey,
-      baseUrl: overrides.baseUrl || cfg?.baseUrl,
-    }),
-  }, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Generate structured surgery record (手术记录).
- * @param {string} disease
- * @param {object} [patientInfo]
- * @param {object} [emrData]
- * @param {object} [preopData]
- * @param {object} [overrides]
- * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
- */
-export async function generateSurgery(disease, patientInfo = {}, emrData = {}, preopData = {}, overrides = {}) {
-  const cfg = getModelConfig();
-  const res = await fetchWithTimeout(`${BASE}/surgery/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      disease,
-      patientInfo,
-      emrData,
-      preopData,
-      provider: overrides.provider || cfg?.provider,
-      model: overrides.model || cfg?.model,
-      apiKey: overrides.apiKey || cfg?.apiKey,
-      baseUrl: overrides.baseUrl || cfg?.baseUrl,
-    }),
-  }, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Generate structured discharge summary (出院小结).
- * @param {string} disease
- * @param {object} [patientInfo]
- * @param {object} [emrData]
- * @param {object} [preopData]
- * @param {object} [surgeryData]
- * @param {object} [overrides]
- * @returns {Promise<{ emr: object|null, content: string, parseError?: boolean }>}
- */
-export async function generateDischarge(disease, patientInfo = {}, emrData = {}, preopData = {}, surgeryData = {}, overrides = {}) {
-  const cfg = getModelConfig();
-  const res = await fetchWithTimeout(`${BASE}/discharge/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      disease,
-      patientInfo,
-      emrData,
-      preopData,
-      surgeryData,
-      provider: overrides.provider || cfg?.provider,
-      model: overrides.model || cfg?.model,
-      apiKey: overrides.apiKey || cfg?.apiKey,
-      baseUrl: overrides.baseUrl || cfg?.baseUrl,
-    }),
-  }, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
+// ──────────────────────────────────────────────
+//  A4: legacy per-type generate/template functions removed.
+//  Use generateRecord(typeId, ...) and getTemplate(templateKey, disease)
+//  below instead. generateEMRStream kept (streaming endpoint not unified).
+// ──────────────────────────────────────────────
 
 /**
  * Generate structured EMR with streaming.
@@ -413,76 +193,6 @@ async function _readSSEStream(response, onChunk) {
   return fullText;
 }
 
-/**
- * Get attending round template for a disease.
- * @param {string} disease
- * @returns {Promise<{template: object|null}>}
- */
-export async function getAttendingTemplate(disease) {
-  const res = await fetchWithTimeout(`${BASE}/templates/attending/${encodeURIComponent(disease)}`, {}, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Get chief round template for a disease.
- * @param {string} disease
- * @returns {Promise<{template: object|null}>}
- */
-export async function getChiefTemplate(disease) {
-  const res = await fetchWithTimeout(`${BASE}/templates/chief/${encodeURIComponent(disease)}`, {}, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Get discussion template for a disease.
- * @param {string} disease
- * @returns {Promise<{template: object|null}>}
- */
-export async function getDiscussionTemplate(disease) {
-  const res = await fetchWithTimeout(`${BASE}/templates/discussion/${encodeURIComponent(disease)}`, {}, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Get surgery template for a disease.
- * @param {string} disease
- * @returns {Promise<{template: object|null}>}
- */
-export async function getSurgeryTemplate(disease) {
-  const res = await fetchWithTimeout(`${BASE}/templates/surgery/${encodeURIComponent(disease)}`, {}, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * Get discharge summary template for a disease.
- * @param {string} disease
- * @returns {Promise<{template: object|null}>}
- */
-export async function getDischargeTemplate(disease) {
-  const res = await fetchWithTimeout(`${BASE}/templates/discharge/${encodeURIComponent(disease)}`, {}, TIMEOUT);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
 // ──────────────────────────────────────────────
 //  Prompt Template Management
 // ──────────────────────────────────────────────
@@ -515,6 +225,22 @@ export async function generateRecord(typeId, { disease, patientInfo = {}, contex
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Get offline template for a disease by templateKey (A4: unified replacement
+ * for the 6 per-type get*Template functions).
+ * @param {string} templateKey - e.g. 'attending', 'chief', 'preop', 'discussion', 'surgery', 'discharge', 'emr'
+ * @param {string} disease
+ * @returns {Promise<{template: object|null}>}
+ */
+export async function getTemplate(templateKey, disease) {
+  const res = await fetchWithTimeout(`${BASE}/templates/${encodeURIComponent(templateKey)}/${encodeURIComponent(disease)}`, {}, TIMEOUT);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `HTTP ${res.status}`);

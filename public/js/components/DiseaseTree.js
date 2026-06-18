@@ -3,7 +3,7 @@
  *
  * Renders the disease catalog (from store.diseaseCategories) as collapsible <details> groups with
  * color-coded headers.  Clicking a disease triggers EMR generation
- * via api.generateEMR().
+ * via api.generateRecord() and api.getTemplate().
  *
  * Usage:
  *   import { DiseaseTree } from './components/DiseaseTree.js';
@@ -149,12 +149,12 @@ export class DiseaseTree {
       : {};
 
     // 1. Set loading state & select disease
+    store.clearAllTypeData();
     store.setState({
       currentDisease: diseaseName,
       loading: true,
       loadingLabel: "生成病历中...",
       error: null,
-      emrData: null,
     });
 
     // 2. Check if offline mode
@@ -177,75 +177,39 @@ export class DiseaseTree {
 
     try {
       if (isOffline) {
-        // 4a. Offline mode: use non-streaming API, no chat message
-        const result = await api.generateEMR(diseaseName, patientInfo);
-        
+        // 4a. Offline mode: use unified generateRecord + getTemplate (A4).
+        // Previously called 7 separate generate* functions + 6 get*Template
+        // functions; now uses the unified API surface.
+        const result = await api.generateRecord('firstCourse', { disease: diseaseName, patientInfo });
+
         // Parse EMR
-        let emr = result.emr;
-        let parseError = result.parseError || false;
+        const emr = result.emr;
+        const parseError = result.parseError || false;
 
-        // Fetch attending round template
-        let attendingData = null;
-        try {
-          const attendingResult = await api.getAttendingTemplate(diseaseName);
-          attendingData = attendingResult.template;
-        } catch (e) {
-          console.warn('Failed to fetch attending template:', e);
+        // Fetch the 6 dependent templates via unified getTemplate()
+        // (attending/chief/preop/discussion/surgery/discharge). These are
+        // offline disease templates used to pre-fill those record slots.
+        const templateKeys = [
+          ['attendingRound', 'attending', 'attendingData'],
+          ['chiefRound', 'chief', 'chiefData'],
+          ['preop', 'preop', 'preopData'],
+          ['discussion', 'discussion', 'discussionData'],
+          ['surgery', 'surgery', 'surgeryData'],
+          ['discharge', 'discharge', 'dischargeData'],
+        ];
+        for (const [typeId, templateKey, storeKey] of templateKeys) {
+          try {
+            const r = await api.getTemplate(templateKey, diseaseName);
+            if (r.template) store.setTypeData(typeId, r.template);
+          } catch (e) {
+            console.warn(`Failed to fetch ${templateKey} template:`, e);
+          }
         }
 
-        // Fetch chief round template
-        let chiefData = null;
-        try {
-          const chiefResult = await api.getChiefTemplate(diseaseName);
-          chiefData = chiefResult.template;
-        } catch (e) {
-          console.warn('Failed to fetch chief template:', e);
-        }
-
-        // Fetch preop summary template
-        let preopData = null;
-        try {
-          const preopResult = await api.getPreopTemplate(diseaseName);
-          preopData = preopResult.template;
-        } catch (e) {
-          console.warn('Failed to fetch preop template:', e);
-        }
-
-        // Fetch discussion template
-        let discussionData = null;
-        try {
-          const discussionResult = await api.getDiscussionTemplate(diseaseName);
-          discussionData = discussionResult.template;
-        } catch (e) {
-          console.warn('Failed to fetch discussion template:', e);
-        }
-
-        // Fetch surgery template
-        let surgeryData = null;
-        try {
-          const surgeryResult = await api.getSurgeryTemplate(diseaseName);
-          surgeryData = surgeryResult.template;
-        } catch (e) {
-          console.warn('Failed to fetch surgery template:', e);
-        }
-
-        // Fetch discharge template
-        let dischargeData = null;
-        try {
-          const dischargeResult = await api.getDischargeTemplate(diseaseName);
-          dischargeData = dischargeResult.template;
-        } catch (e) {
-          console.warn('Failed to fetch discharge template:', e);
-        }
+        // Write firstCourse EMR via setTypeData (stamps _patientId for A6)
+        store.setTypeData('firstCourse', emr);
 
         store.setState({
-          emrData: emr,
-          attendingData: attendingData,
-          chiefData: chiefData,
-          preopData: preopData,
-          discussionData: discussionData,
-          surgeryData: surgeryData,
-          dischargeData: dischargeData,
           loading: false,
           loadingLabel: "",
           error: null,
@@ -286,9 +250,9 @@ export class DiseaseTree {
           parseError = true;
         }
 
-        // Update EMR data
+        // Update EMR data via setTypeData (stamps _patientId for A6)
+        store.setTypeData('firstCourse', emr);
         store.setState({
-          emrData: emr,
           loading: false,
           loadingLabel: "",
           error: null,
