@@ -491,14 +491,20 @@ function assembleUserPrompt(type, context, registryTypeConfig) {
   const merged = getMergedTemplate(activeName);
   const typeConfig = merged.templates[type];
 
+  // F4: resolve registry config the same way assembleSystemPrompt does —
+  // use passed-in or look up by templateKey. Previously this only used the
+  // passed-in arg, so callers like the preview endpoint that don't pass it
+  // would throw "未知类型" for custom types even though they exist in registry.
+  const regConfig = registryTypeConfig || recordRegistry.findTypeByTemplateKey(type)?.type || null;
+
   // Layer 1: Use existing template
   if (typeConfig) {
     return replacePlaceholders(typeConfig.userPrompt, context);
   }
 
   // Layer 2: Auto-generate user prompt
-  if (registryTypeConfig) {
-    return `请为"${context.disease || ''}"生成${registryTypeConfig.label}。`;
+  if (regConfig) {
+    return `请为"${context.disease || ''}"生成${regConfig.label}。`;
   }
 
   // Layer 3: No template found

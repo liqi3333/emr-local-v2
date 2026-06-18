@@ -100,15 +100,17 @@ export class PromptEditor {
       if (cat.enabled === false) continue;
       for (const type of cat.types) {
         if (type.enabled === false) continue;
-        // Only show types that have a template in defaultTemplate
-        if (this._state.defaultTemplate?.templates?.[type.templateKey]) {
-          tabs.push({
-            key: type.templateKey,
-            label: type.label,
-            category: cat.label,
-            typeId: type.id,
-          });
-        }
+        // F4: show ALL enabled registry types, not just those with a default
+        // template. Types without a default template get a generic fallback
+        // (built by _defaultTypeFallback) so the user can still edit prompts
+        // for custom types added via RecordTypeManager.
+        tabs.push({
+          key: type.templateKey,
+          label: type.label,
+          category: cat.label,
+          typeId: type.id,
+          hasDefaultTemplate: !!this._state.defaultTemplate?.templates?.[type.templateKey],
+        });
       }
     }
     this._state.tabOrder = tabs;
@@ -250,7 +252,11 @@ export class PromptEditor {
 
     const typeKey = this._state.currentTab;
     const currentType = current.templates?.[typeKey] || {};
-    const defaultType = defaultTmpl.templates?.[typeKey] || {};
+    // F4: when the type has no entry in defaultTemplate (custom type added
+    // via RecordTypeManager), fall back to generic defaults so the textareas
+    // show editable content instead of blanks. Values match the skeleton
+    // endpoint so editing/saving produces a consistent template.
+    const defaultType = this._resolveTypeDefaults(typeKey);
 
     content.innerHTML = `
       <section class="pe-section">
@@ -307,6 +313,27 @@ export class PromptEditor {
     this._renderFieldsTable(currentType, defaultType);
     this._renderFieldEditForm();
     this._renderPreview(typeKey);
+  }
+
+  /**
+   * F4: resolve the default type config for a tab. Returns the real entry
+   * from defaultTemplate if it exists; otherwise constructs a generic
+   * fallback (matching the skeleton endpoint defaults) so custom types
+   * added via RecordTypeManager have editable prompt content.
+   */
+  _resolveTypeDefaults(typeKey) {
+    const real = this._state.defaultTemplate?.templates?.[typeKey];
+    if (real) return real;
+    const tab = this._state.tabOrder.find(t => t.key === typeKey);
+    const label = tab?.label || typeKey;
+    return {
+      label,
+      rolePrompt: `你是一位经验丰富的普外科主治医师。请根据疾病"{{disease}}"生成一份结构化${label}。{{patientContext}}`,
+      outputFormat: '以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：',
+      fields: {},
+      endingPrompt: '确保内容专业、准确、符合临床规范，所有字段互相对应、逻辑自洽。',
+      userPrompt: `请为"{{disease}}"生成${label}。`,
+    };
   }
 
   _getRegistryTypeForTab(typeKey) {
@@ -698,7 +725,9 @@ export class PromptEditor {
 
   _collectCurrentTabData() {
     const typeKey = this._state.currentTab;
-    const defaultType = this._state.defaultTemplate?.templates?.[typeKey] || {};
+    // F4: use _resolveTypeDefaults so custom types without a default template
+    // still get a label for the saved tab data.
+    const defaultType = this._resolveTypeDefaults(typeKey);
 
     return {
       label: defaultType.label,
