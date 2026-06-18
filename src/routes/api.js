@@ -295,132 +295,50 @@ router.post('/emr/generate/stream', async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
-//  GET /api/templates/attending/:disease  –  Get attending round template
+//  GET /api/templates/:templateKey/:disease  –  Unified template fetch (A2)
+//  Also keeps legacy per-key endpoints as thin proxies for backward compat
+//  until DiseaseTree.js is migrated (A4).
 // ──────────────────────────────────────────────
-router.get('/templates/attending/:disease', (req, res) => {
+const _TEMPLATE_GETTERS = {
+  emr: () => require('../data/templates').getTemplate,
+  attending: () => require('../data/templates').getAttendingTemplate,
+  chief: () => require('../data/templates').getChiefTemplate,
+  preop: () => require('../data/templates').getPreopTemplate,
+  discussion: () => require('../data/templates').getDiscussionTemplate,
+  surgery: () => require('../data/templates').getSurgeryTemplate,
+  discharge: () => require('../data/templates').getDischargeTemplate,
+};
+
+function _serveTemplate(templateKey, disease, res) {
   try {
-    const { disease } = req.params;
     // Clear require cache to ensure latest template is loaded
     delete require.cache[require.resolve('../data/templates')];
-    const { getAttendingTemplate } = require('../data/templates');
-    const template = getAttendingTemplate(disease);
-    
+    const getterFactory = _TEMPLATE_GETTERS[templateKey];
+    if (!getterFactory) {
+      return res.status(404).json({ error: `Unknown template key '${templateKey}'` });
+    }
+    const template = getterFactory()(disease);
     if (!template) {
       return res.json({ template: null, message: 'No template found for this disease' });
     }
-    
     res.json({ template });
   } catch (err) {
-    console.error('[GET /api/templates/attending/:disease]', err.message);
+    console.error(`[GET /api/templates/${templateKey}/${disease}]`, err.message);
     res.status(500).json({ error: err.message });
   }
+}
+
+// Unified endpoint
+router.get('/templates/:templateKey/:disease', (req, res) => {
+  _serveTemplate(req.params.templateKey, req.params.disease, res);
 });
 
-// ──────────────────────────────────────────────
-//  GET /api/templates/chief/:disease  –  Get chief round template
-// ──────────────────────────────────────────────
-router.get('/templates/chief/:disease', (req, res) => {
-  try {
-    const { disease } = req.params;
-    // Clear require cache to ensure latest template is loaded
-    delete require.cache[require.resolve('../data/templates')];
-    const { getChiefTemplate } = require('../data/templates');
-    const template = getChiefTemplate(disease);
-    
-    if (!template) {
-      return res.json({ template: null, message: 'No template found for this disease' });
-    }
-    
-    res.json({ template });
-  } catch (err) {
-    console.error('[GET /api/templates/chief/:disease]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ──────────────────────────────────────────────
-//  GET /api/templates/preop/:disease  –  Get preop summary template
-// ──────────────────────────────────────────────
-router.get('/templates/preop/:disease', (req, res) => {
-  try {
-    const { disease } = req.params;
-    // Clear require cache to ensure latest template is loaded
-    delete require.cache[require.resolve('../data/templates')];
-    const { getPreopTemplate } = require('../data/templates');
-    const template = getPreopTemplate(disease);
-    
-    if (!template) {
-      return res.json({ template: null, message: 'No template found for this disease' });
-    }
-    
-    res.json({ template });
-  } catch (err) {
-    console.error('[GET /api/templates/preop/:disease]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ──────────────────────────────────────────────
-//  GET /api/templates/discussion/:disease  –  Get discussion template
-// ──────────────────────────────────────────────
-router.get('/templates/discussion/:disease', (req, res) => {
-  try {
-    const { disease } = req.params;
-    delete require.cache[require.resolve('../data/templates')];
-    const { getDiscussionTemplate } = require('../data/templates');
-    const template = getDiscussionTemplate(disease);
-    
-    if (!template) {
-      return res.json({ template: null, message: 'No template found for this disease' });
-    }
-    
-    res.json({ template });
-  } catch (err) {
-    console.error('[GET /api/templates/discussion/:disease]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ──────────────────────────────────────────────
-//  GET /api/templates/surgery/:disease  –  Get surgery template
-// ──────────────────────────────────────────────
-router.get('/templates/surgery/:disease', (req, res) => {
-  try {
-    const { disease } = req.params;
-    delete require.cache[require.resolve('../data/templates')];
-    const { getSurgeryTemplate } = require('../data/templates');
-    const template = getSurgeryTemplate(disease);
-    
-    if (!template) {
-      return res.json({ template: null, message: 'No template found for this disease' });
-    }
-    
-    res.json({ template });
-  } catch (err) {
-    console.error('[GET /api/templates/surgery/:disease]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ──────────────────────────────────────────────
-//  GET /api/templates/discharge/:disease  –  Get discharge template
-// ──────────────────────────────────────────────
-router.get('/templates/discharge/:disease', (req, res) => {
-  try {
-    const { disease } = req.params;
-    delete require.cache[require.resolve('../data/templates')];
-    const { getDischargeTemplate } = require('../data/templates');
-    const template = getDischargeTemplate(disease);
-    
-    if (!template) {
-      return res.json({ template: null, message: 'No template found for this disease' });
-    }
-    
-    res.json({ template });
-  } catch (err) {
-    console.error('[GET /api/templates/discharge/:disease]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+// Legacy per-key endpoints (thin proxies — kept until DiseaseTree.js migrated)
+router.get('/templates/attending/:disease', (req, res) => _serveTemplate('attending', req.params.disease, res));
+router.get('/templates/chief/:disease', (req, res) => _serveTemplate('chief', req.params.disease, res));
+router.get('/templates/preop/:disease', (req, res) => _serveTemplate('preop', req.params.disease, res));
+router.get('/templates/discussion/:disease', (req, res) => _serveTemplate('discussion', req.params.disease, res));
+router.get('/templates/surgery/:disease', (req, res) => _serveTemplate('surgery', req.params.disease, res));
+router.get('/templates/discharge/:disease', (req, res) => _serveTemplate('discharge', req.params.disease, res));
 
 module.exports = router;
