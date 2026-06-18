@@ -223,6 +223,10 @@ router.delete('/record-types/category/:id/type/:typeId', (req, res) => {
 // ──────────────────────────────────────────────
 router.post('/record-types/reset', (req, res) => {
   try {
+    // P5: require explicit confirm to prevent accidental/malicious reset
+    if (!req.body || req.body.confirm !== true) {
+      return res.status(400).json({ error: '确认重置请传 { confirm: true }' });
+    }
     registry.saveRegistry(registry.getDefaultRegistry());
     res.json({ success: true });
   } catch (err) {

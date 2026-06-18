@@ -113,6 +113,8 @@ async function deleteType(categoryId, typeId) {
 async function resetRegistry() {
   return request(`${BASE}/reset`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
   });
 }
 
