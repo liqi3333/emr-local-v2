@@ -30,6 +30,7 @@ class Store {
       recordRegistry: null,   // { categories: [...] } from API, null until loaded
       activeCategory: 'clinicalRecords', // current category ID
       activeType: 'firstCourse',         // current type ID within active category
+      currentRecordId: null,             // ID of the record being edited (null = new)
 
       // ─── Disease catalog state ───
       diseaseCategories: null, // Array of category objects from /api/diseases, null until loaded
@@ -106,6 +107,7 @@ class Store {
       toastMessage: null,
       activeCategory: 'clinicalRecords',
       activeType: 'firstCourse',
+      currentRecordId: null,
       ...keep,
     };
     this._notify(Object.keys(this._state), prevState);
@@ -135,8 +137,8 @@ class Store {
         'nursingAssessmentData', 'nursingPlanData', 'nursingRecordSheetData',
       ].forEach(k => { slots[k] = null; });
     }
-    this._state = { ...this._state, ...slots };
-    this._notify(Object.keys(slots), prevState);
+    this._state = { ...this._state, ...slots, currentRecordId: null };
+    this._notify([...Object.keys(slots), 'currentRecordId'], prevState);
   }
 
   /**

@@ -208,6 +208,18 @@ class EMRDatabase {
           `);
         },
       },
+      {
+        version: 2,
+        run: (db) => {
+          // A4: drop orphan chiefNotes column (never referenced, always empty)
+          const cols = new Set(
+            db.prepare('PRAGMA table_info(records)').all().map(c => c.name)
+          );
+          if (cols.has('chiefNotes')) {
+            db.exec('ALTER TABLE records DROP COLUMN chiefNotes');
+          }
+        },
+      },
     ];
   }
 
@@ -299,7 +311,12 @@ class EMRDatabase {
     if (patientId) { where.push('patientId = ?'); params.push(patientId); }
     if (opts.type) { where.push('type = ?'); params.push(opts.type); }
     if (opts.category) { where.push('category = ?'); params.push(opts.category); }
-    let sql = 'SELECT * FROM records';
+    // A1: default to lightweight columns for list views;
+    // pass opts.full = true to get all data columns (e.g. for full inspection).
+    const selectCols = opts.full
+      ? '*'
+      : 'id, patientId, disease, type, category, content, createdAt, updatedAt';
+    let sql = `SELECT ${selectCols} FROM records`;
     if (where.length > 0) sql += ' WHERE ' + where.join(' AND ');
     sql += ' ORDER BY createdAt DESC';
     if (opts.limit) {
@@ -323,8 +340,8 @@ class EMRDatabase {
 
   saveRecord(record, typeConfig) {
     const now = new Date().toISOString();
-    const id = record.id || crypto.randomUUID();
-    const existing = this.getRecordById(id);
+    const isUpdate = !!record.id;
+    const id = isUpdate ? record.id : crypto.randomUUID();
 
     // Auto-generate SQL from RECORD_DATA_COLUMNS
     const dataValues = RECORD_DATA_COLUMNS.map(c => record[c] || '');
@@ -334,14 +351,7 @@ class EMRDatabase {
       ? this._buildRecordContentFromRegistry(record, typeConfig)
       : this._buildRecordContent(record);
 
-    if (existing) {
-      // B1: update category too (previously only INSERT wrote category,
-      // UPDATE left the old value → editing a misclassified record could
-      // never be corrected).
-      // B2: update content JSON so the snapshot stays consistent with the
-      // column data (previously content was frozen at INSERT time →
-      // history/export showed stale data, a medical-legal risk for surgery
-      // records).
+    if (isUpdate) {
       const setClauses = [
         'disease = ?', 'type = ?', 'category = ?', 'content = ?',
         ...RECORD_DATA_COLUMNS.map(c => `${_validateIdent(c)} = ?`),

@@ -89,6 +89,7 @@ export class EmrPreview {
     if (typeConfig && typeConfig.storeKey) {
       this._dataUnsub = store.subscribe(typeConfig.storeKey, () => this._renderActiveType());
     }
+    this._renderActiveType();
   }
 
   _renderActiveType() {
@@ -118,6 +119,7 @@ export class EmrPreview {
     toolbar.innerHTML = `
       <button class="btn-primary" data-action="regenerate">🔄 重新生成</button>
       <button data-action="save">💾 保存病史</button>
+      <button data-action="saveAs">📋 另存为新病史</button>
       <button data-action="history">📋 查看历史</button>
       <button data-action="export">📄 导出 MD</button>
     `;
@@ -129,6 +131,7 @@ export class EmrPreview {
       const action = btn.dataset.action;
       if (action === 'regenerate') this._regenerate();
       else if (action === 'save') this._saveRecord();
+      else if (action === 'saveAs') this._saveAsNew();
       else if (action === 'history') this._showHistory();
       else if (action === 'export') this._exportMarkdown();
     });
@@ -239,7 +242,7 @@ export class EmrPreview {
 
       if (result.emr) {
         store.setTypeData(activeType, result.emr);
-        store.setState({ loading: false, loadingLabel: '', error: null });
+        store.setState({ loading: false, loadingLabel: '', error: null, currentRecordId: null });
         store.toast('success', '病历已更新');
       } else {
         store.setState({ loading: false, loadingLabel: '', error: 'AI 返回空数据，请重试' });
@@ -297,6 +300,7 @@ export class EmrPreview {
 
       // Build record with type-specific fields
       const record = {
+        id: store.state.currentRecordId || undefined,
         patientId: patient.id,
         disease,
         type: activeType,
@@ -309,9 +313,20 @@ export class EmrPreview {
       }
 
       await db.saveRecord(record);
-      store.toast('success', '病历已保存');
+      const label = store.state.currentRecordId ? '病历已更新' : '病历已保存';
+      store.toast('success', label);
     } catch (err) {
       store.toast('error', '保存失败: ' + err.message);
+    }
+  }
+
+  async _saveAsNew() {
+    const savedId = store.state.currentRecordId;
+    store.setState({ currentRecordId: null });
+    try {
+      await this._saveRecord();
+    } finally {
+      // Keep currentRecordId as null after save-as (new record is now in DB)
     }
   }
 
@@ -395,6 +410,7 @@ export class EmrPreview {
             for (const [k, v] of Object.entries(content)) {
               if (enabledKeys.size === 0 || enabledKeys.has(k)) filtered[k] = v;
             }
+            store.setState({ currentRecordId: record.id });
             store.setTypeData(record.type, filtered);
             close();
             store.toast('success', '已加载病历');
@@ -443,6 +459,7 @@ export class EmrPreview {
           const record = records.find(r => r.id === recordId);
           if (record) {
             const content = typeof record.content === 'string' ? (() => { try { return JSON.parse(record.content); } catch { return {}; } })() : (record.content || {});
+            store.setState({ currentRecordId: record.id });
             store.setTypeData(record.type, content);
             close();
             store.toast('success', '已加载病历');

@@ -9,21 +9,27 @@ const { DEFAULT_REGISTRY } = require('../data/recordRegistry');
 
 const REGISTRY_KEY = 'record_registry';
 
+// A2: in-memory cache to avoid repeated DB + JSON.parse on every request
+let _cache = null;
+
 function getDefaultRegistry() {
   return JSON.parse(JSON.stringify(DEFAULT_REGISTRY));
 }
 
 function getRegistry() {
+  if (_cache) return _cache;
   const raw = db.getSetting(REGISTRY_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    _cache = JSON.parse(raw);
+    return _cache;
   } catch {
     return null;
   }
 }
 
 function saveRegistry(registry) {
+  _cache = null; // invalidate cache
   db.setSetting(REGISTRY_KEY, JSON.stringify(registry));
 }
 
