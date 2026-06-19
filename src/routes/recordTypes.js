@@ -178,12 +178,35 @@ router.put('/record-types/category/:id/type/:typeId', (req, res) => {
     const { label, icon, storeKey, templateKey, enabled, sortOrder, contextDependencies, fields } = req.body;
     if (label !== undefined) type.label = label;
     if (icon !== undefined) type.icon = icon;
-    if (storeKey !== undefined) type.storeKey = storeKey;
+    // S4-6: storeKey and templateKey are immutable after creation — changing
+    // them orphans existing data in the frontend store (data stored under the
+    // old key becomes inaccessible and gets overwritten on next generate/save).
+    if (storeKey !== undefined && storeKey !== type.storeKey) {
+      return res.status(400).json({ error: 'storeKey 创建后不可修改' });
+    }
+    if (templateKey !== undefined && templateKey !== type.templateKey) {
+      return res.status(400).json({ error: 'templateKey 创建后不可修改' });
+    }
     if (templateKey !== undefined) type.templateKey = templateKey;
     if (enabled !== undefined) type.enabled = enabled;
     if (sortOrder !== undefined) type.sortOrder = sortOrder;
     if (contextDependencies !== undefined) type.contextDependencies = contextDependencies;
-    if (fields !== undefined) type.fields = fields;
+    // S4-5: detect field key renames — changing an existing key orphans data.
+    // We check: same field count but different key set → likely a rename.
+    if (fields !== undefined) {
+      const oldKeys = new Set((type.fields || []).map(f => f.key));
+      const newKeys = new Set(fields.map(f => f.key));
+      const keysRemoved = [...oldKeys].filter(k => !newKeys.has(k));
+      const keysAdded = [...newKeys].filter(k => !oldKeys.has(k));
+      if (keysRemoved.length > 0 && keysAdded.length > 0) {
+        return res.status(400).json({
+          error: '字段 key 创建后不可修改。如需重命名请先删除旧字段再新建',
+          removed: keysRemoved,
+          added: keysAdded,
+        });
+      }
+      type.fields = fields;
+    }
     registry.saveRegistry(data);
     res.json({ success: true });
   } catch (err) {

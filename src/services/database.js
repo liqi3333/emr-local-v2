@@ -237,8 +237,23 @@ class EMRDatabase {
 
   // ─── Patients ───
 
-  getPatients() {
-    return this._db.prepare('SELECT * FROM patients ORDER BY createdAt DESC').all();
+  getPatients(opts = {}) {
+    const { limit, offset } = opts;
+    let sql = 'SELECT * FROM patients ORDER BY createdAt DESC';
+    const params = [];
+    if (limit) {
+      const l = parseInt(limit, 10);
+      if (Number.isFinite(l) && l > 0) {
+        sql += ' LIMIT ?';
+        params.push(l);
+        const o = parseInt(offset, 10);
+        if (Number.isFinite(o) && o > 0) {
+          sql += ' OFFSET ?';
+          params.push(o);
+        }
+      }
+    }
+    return this._db.prepare(sql).all(...params);
   }
 
   getPatientById(id) {

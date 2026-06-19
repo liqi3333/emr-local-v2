@@ -21,7 +21,9 @@ export class PatientManager {
   }
 
   async render() {
-    const patients = await db.getPatients();
+    // S5-5: initial load only fetches first 20 patients for fast startup.
+    // Full patient list is loaded on-demand when the modal opens.
+    const patients = await db.getPatients({ limit: 20 });
     store.setState({ patients });
 
     if (patients.length > 0 && !store.state.currentPatient) {
@@ -202,6 +204,7 @@ export class PatientManager {
   // ──────────────────────────────────────────────
 
   async _showAllPatientsModal() {
+    // S5-5: load full list on-demand for search/filter/sort in modal
     const patients = await db.getPatients();
     this._patientListState.page = 1;
 

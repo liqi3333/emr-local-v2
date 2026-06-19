@@ -19,8 +19,12 @@ class BackendAPI {
     return res.json();
   }
 
-  async getPatients() {
-    const data = await this._fetch('/patients');
+  async getPatients(opts = {}) {
+    const params = new URLSearchParams();
+    if (opts.limit) params.set('limit', opts.limit);
+    if (opts.offset) params.set('offset', opts.offset);
+    const qs = params.toString();
+    const data = await this._fetch(`/patients${qs ? '?' + qs : ''}`);
     return data.patients || [];
   }
 
@@ -88,7 +92,7 @@ class EMRDatabase {
     this._backend = new BackendAPI();
   }
 
-  async getPatients()             { return this._backend.getPatients(); }
+  async getPatients(opts)        { return this._backend.getPatients(opts); }
   async getPatientById(id)        { return this._backend.getPatientById(id); }
   async savePatient(patient)      { return this._backend.savePatient(patient); }
   async deletePatient(id)         { return this._backend.deletePatient(id); }

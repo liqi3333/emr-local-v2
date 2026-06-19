@@ -7,6 +7,8 @@ const db = require('../services/database');
 const { findType } = require('../services/recordRegistry');
 const { RECORD_DATA_COLUMNS } = require('../data/recordColumns');
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const router = Router();
 
 // ──────────────────────────────────────────────
@@ -14,11 +16,13 @@ const router = Router();
 // ──────────────────────────────────────────────
 
 /**
- * GET /api/patients - Get all patients
+ * GET /api/patients - Get patients with optional pagination
+ * Query params: limit, offset (both optional)
  */
 router.get('/patients', (req, res) => {
   try {
-    const patients = db.getPatients();
+    const { limit, offset } = req.query;
+    const patients = db.getPatients({ limit, offset });
     res.json({ patients });
   } catch (err) {
     console.error('[GET /api/patients]', err.message);
@@ -139,6 +143,14 @@ router.post('/records', (req, res) => {
 
     if (!patientId || !disease) {
       return res.status(400).json({ error: 'patientId and disease are required' });
+    }
+
+    // S1-4: reject non-UUID id to prevent silent data overwrite.
+    // A client-provided id that is not a valid UUID would be treated as an
+    // UPDATE by saveRecord(), silently matching 0 rows or — worse — matching
+    // a different patient's record if the id happens to collide.
+    if (id !== undefined && !UUID_RE.test(id)) {
+      return res.status(400).json({ error: '无效的记录 ID 格式' });
     }
 
     // Verify patient exists

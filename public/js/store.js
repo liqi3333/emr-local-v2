@@ -196,6 +196,7 @@ class Store {
   setTypeData(typeId, data) {
     const typeConfig = this.getTypeConfig(typeId);
     if (typeConfig) {
+      const storeKey = typeConfig.storeKey;
       // A6: stamp current patient id on data for cross-patient save guard.
       // _patientId is a client-only marker; it is never sent to the backend
       // (EmrPreview._saveRecord builds the record by iterating registry

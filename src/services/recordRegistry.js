@@ -23,7 +23,12 @@ function getRegistry() {
   try {
     _cache = JSON.parse(raw);
     return _cache;
-  } catch {
+  } catch (err) {
+    // S4-1: corrupted registry JSON — log the first 200 chars so the
+    // operator can diagnose (power loss during write, manual edit, etc.)
+    console.error('[recordRegistry] Corrupted registry JSON, data:', JSON.stringify(raw.slice(0, 200)));
+    console.error('[recordRegistry] Parse error:', err.message);
+    _cache = null;
     return null;
   }
 }
@@ -36,6 +41,13 @@ function saveRegistry(registry) {
 function ensureDefaultRegistry() {
   const existing = getRegistry();
   if (!existing) {
+    // S4-1: preserve corrupted data before restoring defaults
+    const raw = db.getSetting(REGISTRY_KEY);
+    if (raw) {
+      console.warn('[recordRegistry] Registry is corrupted — backing up before restoring defaults');
+      db.setSetting(REGISTRY_KEY + '_corrupted_' + Date.now(), raw);
+      console.warn('[recordRegistry] Corrupted data saved to key: record_registry_corrupted_' + Date.now());
+    }
     saveRegistry(getDefaultRegistry());
   }
 }

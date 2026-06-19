@@ -202,8 +202,8 @@ export class RecordTypeManager {
         html += `
           <div class="rtm-item rtm-item-editing" data-id="${type.id}">
             <input class="rtm-input" id="editTypeLabel" value="${this._esc(type.label)}" placeholder="类型名称">
-            <input class="rtm-input rtm-input-sm" id="editTypeStoreKey" value="${this._esc(type.storeKey)}" placeholder="storeKey">
-            <input class="rtm-input rtm-input-sm" id="editTypeTemplateKey" value="${this._esc(type.templateKey)}" placeholder="templateKey" readonly title="templateKey 创建后不可修改">
+            <input class="rtm-input rtm-input-sm" id="editTypeStoreKey" value="${this._esc(type.storeKey)}" readonly title="storeKey 创建后不可修改">
+            <input class="rtm-input rtm-input-sm" id="editTypeTemplateKey" value="${this._esc(type.templateKey)}" readonly title="templateKey 创建后不可修改">
             <div class="rtm-item-actions">
               <button class="btn btn-sm btn-primary" data-action="saveType" data-id="${type.id}">保存</button>
               <button class="btn btn-sm btn-ghost" data-action="cancelEdit">取消</button>
@@ -260,7 +260,7 @@ export class RecordTypeManager {
       if (editing) {
         html += `
           <div class="rtm-item rtm-item-editing rtm-field-item" data-key="${field.key}">
-            <input class="rtm-input rtm-input-sm" id="editFieldKey" value="${this._esc(field.key)}" placeholder="key">
+            <input class="rtm-input rtm-input-sm" id="editFieldKey" value="${this._esc(field.key)}" readonly title="字段 key 创建后不可修改，否则已有数据会变成孤儿">
             <input class="rtm-input" id="editFieldLabel" value="${this._esc(field.label)}" placeholder="标签">
             <textarea class="rtm-input rtm-textarea" id="editFieldDesc" placeholder="描述">${this._esc(field.description)}</textarea>
             <div class="rtm-item-actions">
@@ -486,8 +486,7 @@ export class RecordTypeManager {
         const type = this._state.selectedType;
         const field = type?.fields.find(f => f.key === key);
         if (field) {
-          const newKey = document.getElementById('editFieldKey').value.trim() || field.key;
-          field.key = newKey;
+          // S4-5: key is readonly after creation — ignore any submitted value
           field.label = document.getElementById('editFieldLabel').value.trim() || field.label;
           field.description = document.getElementById('editFieldDesc').value.trim() || field.description;
           await this._save();
