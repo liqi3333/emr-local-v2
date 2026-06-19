@@ -312,22 +312,17 @@ export class EmrPreview {
         }
       }
 
-      await db.saveRecord(record);
-      const label = store.state.currentRecordId ? '病历已更新' : '病历已保存';
-      store.toast('success', label);
+      const savedId = await db.saveRecord(record);
+      store.setState({ currentRecordId: savedId });
+      store.toast('success', '病历已保存');
     } catch (err) {
       store.toast('error', '保存失败: ' + err.message);
     }
   }
 
   async _saveAsNew() {
-    const savedId = store.state.currentRecordId;
     store.setState({ currentRecordId: null });
-    try {
-      await this._saveRecord();
-    } finally {
-      // Keep currentRecordId as null after save-as (new record is now in DB)
-    }
+    await this._saveRecord();
   }
 
   async _showHistory() {
