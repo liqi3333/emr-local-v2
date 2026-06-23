@@ -2,8 +2,8 @@
  * DiseaseTree — sidebar disease category browser.
  *
  * Renders the disease catalog (from store.diseaseCategories) as collapsible <details> groups with
- * color-coded headers.  Clicking a disease triggers EMR generation
- * via api.generateRecord() and api.getTemplate().
+ * color-coded headers.  Clicking a disease selects it in the store; generation is triggered
+ * manually via the "🔄 重新生成" button in EmrPreview.
  *
  * Usage:
  *   import { DiseaseTree } from './components/DiseaseTree.js';
@@ -11,7 +11,6 @@
  *   await tree.render();
  */
 import { store } from "../store.js";
-import * as api from "../services/api.js";
 import { db } from "../db.js";
 
 export class DiseaseTree {
@@ -134,162 +133,15 @@ export class DiseaseTree {
   //  Disease click handler
   // ────────────────────────────────────────────────────────────────
 
-  async _onDiseaseClick(diseaseName) {
+  _onDiseaseClick(diseaseName) {
     if (store.state.loading) return;
     if (diseaseName === store.state.currentDisease) return;
 
-    const patient = store.state.currentPatient;
-    const patientInfo = patient
-      ? {
-          name: patient.name || "",
-          gender: patient.gender || "",
-          age: patient.age || "",
-          bedNo: patient.bedNo || "",
-        }
-      : {};
-
-    // 1. Set loading state & select disease
     store.clearAllTypeData();
     store.setState({
       currentDisease: diseaseName,
-      loading: true,
-      loadingLabel: "生成病历中...",
       error: null,
     });
-
-    // 2. Check if offline mode
-    const isOffline = localStorage.getItem('activeModelId') === '__offline__';
-
-    // 3. Create placeholder message (only for online mode)
-    if (!isOffline) {
-      const aiMsg = {
-        role: "assistant",
-        content: "",
-        timestamp: new Date().toISOString(),
-        streaming: true,
-      };
-      store.setState({
-        chatMessages: [...store.state.chatMessages, aiMsg],
-      });
-    }
-
-    let fullContent = "";
-
-    try {
-      if (isOffline) {
-        // 4a. Offline mode: use unified generateRecord + getTemplate (A4).
-        // Previously called 7 separate generate* functions + 6 get*Template
-        // functions; now uses the unified API surface.
-        const result = await api.generateRecord('firstCourse', { disease: diseaseName, patientInfo });
-
-        // Parse EMR
-        const emr = result.emr;
-        const parseError = result.parseError || false;
-
-        // Fetch the 6 dependent templates via unified getTemplate()
-        // (attending/chief/preop/discussion/surgery/discharge). These are
-        // offline disease templates used to pre-fill those record slots.
-        const templateKeys = [
-          ['attendingRound', 'attending', 'attendingData'],
-          ['chiefRound', 'chief', 'chiefData'],
-          ['preop', 'preop', 'preopData'],
-          ['discussion', 'discussion', 'discussionData'],
-          ['surgery', 'surgery', 'surgeryData'],
-          ['discharge', 'discharge', 'dischargeData'],
-        ];
-        for (const [typeId, templateKey, storeKey] of templateKeys) {
-          try {
-            const r = await api.getTemplate(templateKey, diseaseName);
-            if (r.template) store.setTypeData(typeId, r.template);
-          } catch (e) {
-            console.warn(`Failed to fetch ${templateKey} template:`, e);
-          }
-        }
-
-        // Write firstCourse EMR via setTypeData (stamps _patientId for A6)
-        store.setTypeData('firstCourse', emr);
-
-        store.setState({
-          loading: false,
-          loadingLabel: "",
-          error: null,
-        });
-
-        if (parseError) {
-          store.toast("error", "AI 返回格式异常，请重试");
-        }
-      } else {
-        // 4b. Online mode: use streaming API
-        await api.generateEMRStream(diseaseName, patientInfo, (chunk) => {
-          fullContent += chunk;
-          // Update streaming message
-          const msgs = [...store.state.chatMessages];
-          const last = msgs[msgs.length - 1];
-          if (last && last.role === "assistant" && last.streaming) {
-            last.content = fullContent;
-            store.setState({ chatMessages: msgs });
-          }
-        });
-
-        // Parse EMR from accumulated content
-        let emr = null;
-        let parseError = false;
-
-        try {
-          const match = fullContent.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-          if (match) {
-            emr = JSON.parse(match[1].trim());
-          } else {
-            const cleaned = fullContent
-              .replace(/```(?:json)?\s*/gi, "")
-              .replace(/```\s*$/g, "")
-              .trim();
-            emr = JSON.parse(cleaned);
-          }
-        } catch {
-          parseError = true;
-        }
-
-        // Update EMR data via setTypeData (stamps _patientId for A6)
-        store.setTypeData('firstCourse', emr);
-        store.setState({
-          loading: false,
-          loadingLabel: "",
-          error: null,
-        });
-
-        if (parseError) {
-          store.toast("error", "AI 返回格式异常，请重试");
-        }
-
-        // Finalize chat message
-        const msgs = [...store.state.chatMessages];
-        const last = msgs[msgs.length - 1];
-        if (last && last.role === "assistant" && last.streaming) {
-          delete last.streaming;
-          last.content = fullContent || `已为「${diseaseName}」生成病历，请查看右侧预览。`;
-          store.setState({ chatMessages: msgs });
-        }
-      }
-    } catch (err) {
-      // 5. Error handling
-      const msgs = [...store.state.chatMessages];
-      const last = msgs[msgs.length - 1];
-      if (last && last.role === "assistant") {
-        if (!last.content) {
-          msgs.pop();
-        } else if (last.streaming) {
-          delete last.streaming;
-        }
-      }
-      store.setState({
-        chatMessages: msgs,
-        error: err.message,
-        loading: false,
-        loadingLabel: "",
-      });
-      store.toast("error", err.message);
-    }
   }
 
   // ────────────────────────────────────────────────────────────────

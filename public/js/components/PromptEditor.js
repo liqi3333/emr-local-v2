@@ -768,8 +768,15 @@ export class PromptEditor {
     try {
       await api.savePromptTemplate(this._state.currentName, template);
       this._state.currentTemplate = template;
+
+      // 保存即生效：自动将该模板设为当前使用
+      if (this._state.currentName !== this._state.activeName) {
+        await api.setActivePromptTemplate(this._state.currentName);
+        this._state.activeName = this._state.currentName;
+      }
+
       this._render();
-      this._toast('success', '当前页保存成功');
+      this._toast('success', '当前页保存成功，已设为当前使用模板');
     } catch (err) {
       this._toast('error', err.message);
     } finally {

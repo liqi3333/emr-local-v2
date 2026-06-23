@@ -103,6 +103,51 @@ function getKnowledge(disease) {
 }
 
 /**
+ * Get knowledge text filtered by specific files for a record type.
+ * If knowledgeFiles is empty or not provided, falls back to getKnowledge()
+ * (full knowledge injection for backward compatibility).
+ *
+ * @param {string} disease
+ * @param {string[]} knowledgeFiles - Array of filenames to include (e.g. ['01-诊疗指南.md'])
+ * @returns {{ text: string, files: string[], truncated: boolean }}
+ */
+function getKnowledgeForType(disease, knowledgeFiles) {
+  if (!knowledgeFiles || knowledgeFiles.length === 0) {
+    return getKnowledge(disease);
+  }
+  const dir = _diseaseDir(disease);
+  if (!fs.existsSync(dir)) {
+    return { text: '', files: [], truncated: false };
+  }
+  const parts = [];
+  const included = [];
+  for (const f of knowledgeFiles) {
+    const fp = path.join(dir, f);
+    if (!fs.existsSync(fp)) {
+      console.warn(`[knowledge] File not found: ${f}`);
+      continue;
+    }
+    try {
+      const content = fs.readFileSync(fp, 'utf-8');
+      parts.push(`### ${f}\n${content}`);
+      included.push(f);
+    } catch (e) {
+      console.warn(`[knowledge] Failed to read ${f}:`, e.message);
+    }
+  }
+  if (parts.length === 0) {
+    return { text: '', files: [], truncated: false };
+  }
+  let text = parts.join('\n\n---\n\n');
+  let truncated = false;
+  if (text.length > MAX_CHARS) {
+    text = text.slice(0, MAX_CHARS);
+    truncated = true;
+  }
+  return { text, files: included, truncated };
+}
+
+/**
  * List all diseases that have a knowledge base.
  * @returns {Array<{ disease: string, fileCount: number }>}
  */
@@ -175,6 +220,7 @@ function deleteKnowledgeFile(disease, filename) {
 
 module.exports = {
   getKnowledge,
+  getKnowledgeForType,
   listKnowledge,
   listDiseaseFiles,
   readKnowledgeFile,

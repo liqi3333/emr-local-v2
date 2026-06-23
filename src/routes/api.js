@@ -157,10 +157,9 @@ async function _generateCore(typeConfig, categoryId, reqBody) {
     content = mockGenerate(typeConfig, disease, context);
   } else {
     let systemPrompt = promptTemplates.assembleSystemPrompt(typeConfig.templateKey, context, typeConfig);
-    // F1: RAG injection — if a knowledge base exists for this disease,
-    // append it to the system prompt so the AI grounds its output in the
-    // domain knowledge (clinical guidelines, key points, etc.)
-    const kb = knowledge.getKnowledge(disease);
+    // F1: RAG injection — use type-specific knowledge files if configured,
+    // otherwise fall back to full knowledge injection for backward compatibility.
+    const kb = knowledge.getKnowledgeForType(disease, typeConfig.knowledgeFiles);
     if (kb.text) {
       systemPrompt += `\n\n---\n以下是与"${disease}"相关的专业知识库内容，请在生成时严格参考，确保内容符合临床指南：\n${kb.text}`;
     }

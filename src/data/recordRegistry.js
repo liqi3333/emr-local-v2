@@ -23,6 +23,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 0,
           contextDependencies: [],
+          knowledgeFiles: ['01-诊疗指南.md', '02-诊断标准.md'],
           fields: [
             { key: 'chief', label: '主诉', description: '主诉（格式：症状或体征+持续时间，如"发现右侧腹股沟区可复性肿物1年"。不超过20字，突出主要症状、部位、性质、时间要素）' },
             { key: 'hpi', label: '现病史', description: '现病史（需包含：①起病情况——诱因、起病缓急、具体时间；②主要症状特点——部位、性质、程度、持续时间、加重或缓解因素；③伴随症状——有无发热、恶心、呕吐、腹胀、排便改变等，按系统鉴别行阴性症状描述；④诊疗经过——院外就诊、检查、用药及疗效；⑤发病以来一般情况——精神、饮食、睡眠、大小便、体重变化。内容应支撑鉴别诊断，时间线清晰）' },
@@ -44,6 +45,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 1,
           contextDependencies: ['firstCourse'],
+          knowledgeFiles: ['01-诊疗指南.md', '02-诊断标准.md'],
           fields: [
             { key: 'supplementHistory', label: '补充病史', description: '补充病史（根据首次病程录中现病史部分，补充追问得到的病史细节，包括起病情况、症状演变、诊治经过等；如无补充可写"无特殊补充"）' },
             { key: 'summary', label: '病情摘要', description: '病情摘要（基于首次病程录精炼概括，每条一行，前面加数字序号。①患者基本信息——姓名、性别、年龄、床号；②入院日期、入院诊断；③主诉；④现病史摘要；⑤专科查体要点；⑥辅助检查关键阳性结果；⑦目前治疗方案及效果）' },
@@ -62,6 +64,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 2,
           contextDependencies: ['firstCourse', 'attendingRound'],
+          knowledgeFiles: ['01-诊疗指南.md', '02-诊断标准.md'],
           fields: [
             { key: 'chiefSummary', label: '病情摘要', description: '病情摘要（综合首次病程录和主治查房内容，精炼概括，每条一行，前面加数字序号。①患者基本信息；②入院日期、入院诊断；③主诉；④现病史摘要；⑤专科查体要点；⑥辅助检查关键阳性结果；⑦目前治疗方案及效果）' },
             { key: 'chiefDiagnosis', label: '诊断', description: '诊断（在主治查房诊断基础上，结合主任查房时的新信息确认或修正，分两部分写，每条一行，前面加数字序号。①主要疾病诊断——规范全称，注明侧别、分期、分型、并发症；②伴发诊断——逐条列出所有并存疾病）' },
@@ -79,6 +82,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 3,
           contextDependencies: ['firstCourse', 'attendingRound'],
+          knowledgeFiles: ['01-诊疗指南.md', '02-诊断标准.md', '03-手术操作规范.md'],
           fields: [
             { key: 'preopDiagnosis', label: '术前诊断', description: '术前诊断（规范全称，注明侧别、分型。如：右侧腹股沟斜疝）' },
             { key: 'preopIndication', label: '手术指征', description: '手术指征（逐条列出，每条一行，前面加数字序号。①病史特点——症状持续时间、进展；②查体发现——肿物大小、可复性；③辅助检查——B超等影像结果；④综合评估——诊断明确，具有手术指征）' },
@@ -97,6 +101,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 4,
           contextDependencies: ['firstCourse', 'attendingRound', 'preop'],
+          knowledgeFiles: ['01-诊疗指南.md', '02-诊断标准.md', '03-手术操作规范.md'],
           fields: [
             { key: 'discussionParticipants', label: '参加人员', description: '参加人员（格式：主持人：XXX主治医师\\n参加人员：XXX住院医师、XXX住院医师、XXX护士长）' },
             { key: 'discussionCaseSummary', label: '病例摘要', description: '病例摘要（简明扼要，每条一行，前面加数字序号。①患者基本信息；②主诉；③现病史要点；④查体关键发现；⑤辅助检查结果）' },
@@ -115,6 +120,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 5,
           contextDependencies: ['firstCourse', 'preop'],
+          knowledgeFiles: ['01-诊疗指南.md', '03-手术操作规范.md'],
           fields: [
             { key: 'surgeryName', label: '手术名称', description: '手术名称（规范全称，如：右侧腹股沟疝无张力修补术（Lichtenstein术））' },
             { key: 'surgerySurgeon', label: '手术者', description: '手术者（留空，由医生自行填写）' },
@@ -134,6 +140,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 6,
           contextDependencies: ['firstCourse', 'preop', 'surgery'],
+          knowledgeFiles: ['01-诊疗指南.md', '04-术后管理.md'],
           fields: [
             { key: 'dischargeAdmissionDate', label: '入院日期', description: '入院日期（格式：____年____月____日）' },
             { key: 'dischargeDate', label: '出院日期', description: '出院日期（格式：____年____月____日）' },
@@ -162,6 +169,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 0,
           contextDependencies: ['firstCourse'],
+          knowledgeFiles: ['01-诊疗指南.md', '03-手术操作规范.md'],
           fields: [
             { key: 'surgeryName', label: '手术名称', description: '手术名称（规范全称）' },
             { key: 'surgeryIndication', label: '手术指征', description: '手术指征（简明列出手术适应症）' },
@@ -180,6 +188,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 1,
           contextDependencies: ['firstCourse'],
+          knowledgeFiles: [],
           fields: [
             { key: 'bloodType', label: '血型', description: '血型（如：A型Rh阳性）' },
             { key: 'transfusionReason', label: '输血原因', description: '输血原因（简明说明输血指征）' },
@@ -199,6 +208,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 2,
           contextDependencies: ['firstCourse', 'preop'],
+          knowledgeFiles: ['01-诊疗指南.md', '03-手术操作规范.md'],
           fields: [
             { key: 'anesthesiaType', label: '麻醉方式', description: '麻醉方式（如：全身麻醉、椎管内麻醉等）' },
             { key: 'surgeryName', label: '拟行手术', description: '拟行手术（规范全称）' },
@@ -227,6 +237,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 0,
           contextDependencies: ['firstCourse'],
+          knowledgeFiles: ['01-诊疗指南.md', '04-术后管理.md'],
           fields: [
             { key: 'admissionTime', label: '入院时间', description: '入院时间（格式：____年____月____日 ____时____分）' },
             { key: 'vitalSigns', label: '生命体征', description: '生命体征（T、P、R、BP、疼痛评分）' },
@@ -247,6 +258,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 1,
           contextDependencies: ['firstCourse', 'nursingAssessment'],
+          knowledgeFiles: ['01-诊疗指南.md', '04-术后管理.md'],
           fields: [
             { key: 'nursingDiagnosis', label: '护理诊断', description: '护理诊断（基于评估结果列出护理问题）' },
             { key: 'goals', label: '护理目标', description: '护理目标（短期和长期目标）' },
@@ -265,6 +277,7 @@ const DEFAULT_REGISTRY = {
           enabled: true,
           sortOrder: 2,
           contextDependencies: ['firstCourse', 'nursingPlan'],
+          knowledgeFiles: ['04-术后管理.md'],
           fields: [
             { key: 'recordDate', label: '记录日期', description: '记录日期（格式：____年____月____日）' },
             { key: 'recordTime', label: '记录时间', description: '记录时间（格式：____时____分）' },
