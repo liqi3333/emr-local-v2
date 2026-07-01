@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>电子病历系统 v2</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- ═══ Header ═══ -->
+  <header class="app-header">
+    <button class="toggle-sidebar" id="toggleSidebar" title="切换侧栏 (Ctrl+B)">☰</button>
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+      <span>电子病历系统</span>
+    </div>
+    <span class="model-badge" id="modelBadge">⚙️ 未配置模型</span>
+    <div class="header-actions">
+      <button id="btnDiseases" title="疾病目录管理">🏥 疾病管理</button>
+      <button id="btnRecordTypes" title="病历类型管理">🏷️ 病历类型</button>
+      <button id="btnPrompts" title="提示词管理">✏️ 提示词</button>
+      <button id="btnModels" title="模型管理 (Ctrl+M)">🧠 模型</button>
+      <button id="btnExport" title="导出病历 (Ctrl+P)">📄 导出</button>
+    </div>
+  </header>
+
+  <!-- ═══ Container ═══ -->
+  <div class="app-container">
+
+    <!-- ═══ Sidebar ═══ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h3>🏥 疾病目录</h3>
+      </div>
+      <div class="sidebar-search">
+        <input type="text" id="diseaseSearch" placeholder="搜索疾病..." />
+      </div>
+      <div class="sidebar-content" id="diseaseTree">
+        <!-- Disease tree rendered by DiseaseTree component -->
+      </div>
+    </aside>
+
+    <!-- ═══ Main ═══ -->
+    <main class="main-content">
+
+      <!-- Patient Bar -->
+      <div class="patient-bar" id="patientBar">
+        <div class="patient-actions-left">
+          <button class="btn-primary" id="btnAddPatient">➕ 添加患者</button>
+          <button id="btnAllPatients">👥 所有患者</button>
+        </div>
+        <div class="patient-fields">
+          <div class="field">
+            <label>姓名</label>
+            <input type="text" id="patientName" value="" placeholder="选择或添加患者" />
+          </div>
+          <div class="field">
+            <label>性别</label>
+            <select id="patientGender">
+              <option value="男" selected>男</option>
+              <option value="女">女</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>年龄</label>
+            <input type="number" id="patientAge" value="" min="0" max="150" />
+          </div>
+          <div class="field">
+            <label>床号</label>
+            <input type="text" id="patientBed" value="" />
+          </div>
+        </div>
+        <button class="btn-save" id="btnSavePatient">💾 保存</button>
+      </div>
+
+      <!-- Split Panes -->
+      <div class="content-split" id="contentSplit">
+
+        <!-- Top: Chat -->
+        <div class="pane" id="chatPane">
+          <div class="pane-header">
+            💬 AI 对话
+            <span class="badge" id="chatCount">0 条消息</span>
+          </div>
+          <div class="pane-content" id="chatMessages" style="display:flex;flex-direction:column;">
+            <div class="chat-welcome">
+              <div class="icon">💬</div>
+              <div>点击左侧疾病生成结构化病历</div>
+              <div style="font-size:12px;color:var(--text-muted)">或直接在下方输入对话</div>
+            </div>
+          </div>
+          <div style="padding:0 16px 12px;">
+            <div class="chat-input-area">
+              <input type="text" id="chatInput" placeholder="输入消息... (Enter 发送)" disabled />
+              <button class="btn-send" id="btnSend" disabled>发送</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="pane-divider" id="paneDivider"></div>
+
+        <!-- Bottom: EMR Preview -->
+        <div class="pane" id="emrPane">
+          <div class="pane-header">
+            <!-- Level 1: Category tabs (rendered by JS from registry) -->
+            <div class="category-tabs" id="categoryTabs"></div>
+            <!-- Level 2: Type tabs within active category (rendered by JS) -->
+            <div class="type-tabs" id="typeTabs"></div>
+          </div>
+          <div class="pane-content emr-preview" id="dynamicPreview">
+            <div class="emr-placeholder">
+              <div class="icon">📋</div>
+              <div>选择疾病后自动生成</div>
+              <div style="font-size:12px;color:var(--text-muted)">AI 将一次性生成完整结构化病历</div>
+            </div>
+          </div>
+          <!-- Legacy preview containers (hidden, kept for backward compatibility) -->
+          <div class="pane-content emr-preview" id="emrPreview" style="display:none;">
+            <div class="emr-placeholder">
+              <div class="icon">📋</div>
+              <div>选择疾病后自动生成</div>
+              <div style="font-size:12px;color:var(--text-muted)">AI 将一次性生成完整结构化病历</div>
+            </div>
+          </div>
+          <div class="pane-content emr-preview" id="attendingPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="chiefPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="preopPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="discussionPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="surgeryPreview" style="display:none;"></div>
+          <div class="pane-content emr-preview" id="dischargePreview" style="display:none;"></div>
+        </div>
+
+      </div><!-- /content-split -->
+    </main>
+  </div>
+
+  <!-- ═══ Toast Container ═══ -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ═══ Modal Container ═══ -->
+  <div id="modalContainer"></div>
+
+  <!-- ═══ Scripts ═══ -->
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

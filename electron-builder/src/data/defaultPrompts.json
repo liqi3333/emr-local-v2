@@ -1,0 +1,210 @@
+{
+  "version": "2026.06.13-1",
+  "templates": {
+    "emr": {
+      "label": "首次病程录",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份结构化电子病历。{{patientContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "chief": { "label": "主诉" },
+        "hpi": { "label": "现病史" },
+        "past": { "label": "既往史" },
+        "exam": { "label": "体格检查" },
+        "lab": { "label": "辅助检查" },
+        "diag": { "label": "初步诊断" },
+        "workup": { "label": "拟诊讨论" },
+        "diff": { "label": "鉴别诊断" },
+        "plan": { "label": "治疗计划" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合临床规范，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成电子病历。"
+    },
+    "attending": {
+      "label": "主治查房",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下首次病程录，生成一份主治医师首次查房病程记录。{{patientContext}}{{emrDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "supplementHistory": { "label": "补充病史" },
+        "summary": { "label": "病情摘要" },
+        "diagnosis": { "label": "诊断" },
+        "analysis": { "label": "分析" },
+        "treatment": { "label": "下一步诊疗计划" },
+        "signed": { "label": "签名" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合临床规范，体现主治医师的专业判断深度，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成主治医师首次查房病程记录。"
+    },
+    "chief": {
+      "label": "主任查房",
+      "rolePrompt": "你是一位经验丰富的普外科主任医师。请基于以下病历资料，生成一份主任医师首次查房病程记录。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "chiefSummary": { "label": "病情摘要" },
+        "chiefDiagnosis": { "label": "诊断" },
+        "chiefAnalysis": { "label": "分析" },
+        "chiefTreatment": { "label": "诊疗计划" },
+        "chiefSigned": { "label": "医师签名" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合临床规范，体现主任医师的专业判断深度和指导性意见，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成主任医师首次查房病程记录。"
+    },
+    "preop": {
+      "label": "术前小结",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前小结。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "preopDiagnosis": { "label": "术前诊断" },
+        "preopIndication": { "label": "手术指征" },
+        "preopPlan": { "label": "手术方案" },
+        "preopPreparation": { "label": "术前准备" },
+        "preopRisk": { "label": "风险评估" },
+        "preopSigned": { "label": "医师签名" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合临床规范，体现术前评估的完整性和严谨性，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成术前小结。"
+    },
+    "discussion": {
+      "label": "术前讨论",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前讨论记录。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}{{preopDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "discussionParticipants": { "label": "参加人员" },
+        "discussionCaseSummary": { "label": "病例摘要" },
+        "discussionDiagnosis": { "label": "诊断" },
+        "discussionContent": { "label": "讨论内容" },
+        "discussionConclusion": { "label": "讨论结论" },
+        "discussionSigned": { "label": "记录者签名" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合临床规范，体现术前讨论的多学科协作和规范化流程，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成术前讨论记录。"
+    },
+    "surgery": {
+      "label": "手术记录",
+      "rolePrompt": "你是一位经验丰富的普外科手术医师。请基于以下病历资料，生成一份手术记录。{{patientContext}}{{emrDataContext}}{{preopDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "surgeryName": { "label": "手术名称" },
+        "surgerySurgeon": { "label": "手术者" },
+        "surgeryAssistant": { "label": "助手" },
+        "surgeryAnesthesia": { "label": "麻醉方式" },
+        "surgeryProcess": { "label": "手术经过" },
+        "surgeryFindings": { "label": "术中发现" },
+        "surgerySigned": { "label": "手术者签名" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合临床规范，体现手术记录的完整性和规范性，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成手术记录。"
+    },
+    "discharge": {
+      "label": "出院小结",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份出院小结。{{patientContext}}{{emrDataContext}}{{preopDataContext}}{{surgeryDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "dischargeAdmissionDate": { "label": "入院日期" },
+        "dischargeDate": { "label": "出院日期" },
+        "dischargeDiagnosis": { "label": "出院诊断" },
+        "dischargeTreatment": { "label": "治疗经过" },
+        "dischargeOutcome": { "label": "出院情况" },
+        "dischargeAdvice": { "label": "出院医嘱" },
+        "dischargeSigned": { "label": "主治医师签名" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合临床规范，体现出院评估的完整性和医嘱的可执行性，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成出院小结。"
+    },
+    "surgeryConsent": {
+      "label": "手术同意书",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份手术知情同意书。{{patientContext}}{{emrDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "surgeryName": { "label": "手术名称" },
+        "surgeryIndication": { "label": "手术指征" },
+        "surgeryRisks": { "label": "手术风险" },
+        "alternatives": { "label": "替代方案" },
+        "patientSignature": { "label": "患者/家属签名" },
+        "consentDate": { "label": "签署日期" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成手术知情同意书。"
+    },
+    "bloodTransfusionConsent": {
+      "label": "输血同意书",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请根据疾病\"{{disease}}\"生成一份输血知情同意书。{{patientContext}}{{emrDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "bloodType": { "label": "血型" },
+        "transfusionReason": { "label": "输血原因" },
+        "bloodProducts": { "label": "血液成分" },
+        "transfusionRisks": { "label": "输血风险" },
+        "alternatives": { "label": "替代方案" },
+        "patientSignature": { "label": "患者/家属签名" },
+        "consentDate": { "label": "签署日期" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合输血知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成输血知情同意书。"
+    },
+    "anesthesiaConsent": {
+      "label": "麻醉同意书",
+      "rolePrompt": "你是一位经验丰富的麻醉科主治医师。请根据疾病\"{{disease}}\"生成一份麻醉知情同意书。{{patientContext}}{{emrDataContext}}{{preopDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "anesthesiaType": { "label": "麻醉方式" },
+        "surgeryName": { "label": "拟行手术" },
+        "anesthesiaRisks": { "label": "麻醉风险" },
+        "alternatives": { "label": "替代方案" },
+        "patientCondition": { "label": "患者情况" },
+        "patientSignature": { "label": "患者/家属签名" },
+        "consentDate": { "label": "签署日期" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合麻醉知情同意书规范，风险告知全面充分，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成麻醉知情同意书。"
+    },
+    "nursingAssessment": {
+      "label": "护理评估",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份入院护理评估单。{{patientContext}}{{emrDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "admissionTime": { "label": "入院时间" },
+        "vitalSigns": { "label": "生命体征" },
+        "skinCondition": { "label": "皮肤情况" },
+        "mobility": { "label": "活动能力" },
+        "nutrition": { "label": "营养状况" },
+        "mentalStatus": { "label": "精神状态" },
+        "riskAssessment": { "label": "风险评估" },
+        "nursingDiagnosis": { "label": "护理诊断" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合护理评估规范，评估全面准确，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成入院护理评估单。"
+    },
+    "nursingPlan": {
+      "label": "护理计划",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份护理计划。{{patientContext}}{{emrDataContext}}{{nursingAssessmentDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "nursingDiagnosis": { "label": "护理诊断" },
+        "goals": { "label": "护理目标" },
+        "interventions": { "label": "护理措施" },
+        "evaluation": { "label": "评价标准" },
+        "healthEducation": { "label": "健康教育" },
+        "dischargePlan": { "label": "出院计划" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合护理计划规范，措施具体可执行，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成护理计划。"
+    },
+    "nursingRecordSheet": {
+      "label": "护理记录单",
+      "rolePrompt": "你是一位经验丰富的普外科责任护士。请根据疾病\"{{disease}}\"生成一份护理记录单。{{patientContext}}{{emrDataContext}}{{nursingPlanDataContext}}",
+      "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
+      "fields": {
+        "recordDate": { "label": "记录日期" },
+        "recordTime": { "label": "记录时间" },
+        "vitalSigns": { "label": "生命体征" },
+        "intakeOutput": { "label": "出入量" },
+        "medication": { "label": "用药记录" },
+        "nursingInterventions": { "label": "护理措施" },
+        "patientCondition": { "label": "患者情况" },
+        "nurseSignature": { "label": "护士签名" }
+      },
+      "endingPrompt": "确保内容专业、准确、符合护理记录规范，记录及时准确，所有字段互相对应、逻辑自洽。",
+      "userPrompt": "请为\"{{disease}}\"生成护理记录单。"
+    }
+  }
+}

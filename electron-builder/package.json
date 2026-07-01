@@ -1,0 +1,88 @@
+{
+  "name": "emr-local-v2",
+  "version": "1.0.0",
+  "description": "AI-powered local electronic medical record system v2",
+  "main": "electron/main.js",
+  "author": "EMR v2",
+  "license": "MIT",
+  "homepage": "https://github.com/YOUR_GITHUB_USERNAME/emr-local-v2",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_GITHUB_USERNAME/emr-local-v2.git"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "electron:dev": "electron .",
+    "electron:build": "electron-builder build --win",
+    "electron:build:win": "electron-builder build --win --publish never",
+    "electron:build:mac": "electron-builder build --mac --publish never",
+    "electron:build:linux": "electron-builder build --linux --publish never",
+    "electron:build:publish": "electron-builder build --win --publish always",
+    "rebuild": "electron-rebuild"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "electron-updater": "^6.6.2",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "@electron/rebuild": "^3.0.0"
+  },
+  "build": {
+    "appId": "com.emr.local-v2",
+    "productName": "电子病历系统 v2",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "public/**/*",
+      "package.json",
+      "server.js"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build-resources/icon.ico",
+      "artifactName": "EMR-v2-${version}-Portable.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "build-resources/icon.icns",
+      "artifactName": "EMR-v2-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build-resources/icon.png",
+      "artifactName": "EMR-v2-${version}.${ext}",
+      "category": "Medical"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "YOUR_GITHUB_USERNAME",
+      "repo": "emr-local-v2"
+    }
+  }
+}

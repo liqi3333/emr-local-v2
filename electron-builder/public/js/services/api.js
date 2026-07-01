@@ -1,0 +1,415 @@
+/**
+ * Backend API client — communicates with the Express proxy server.
+ * All AI calls go through the backend to keep API keys secure.
+ * Usage: import { api } from './services/api.js'
+ */
+
+const BASE = '/api';
+const TIMEOUT = 60_000; // 60s for non-streaming calls
+const STREAM_TIMEOUT = 120_000; // 120s for streaming calls
+
+/** Helper: fetch with timeout */
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`请求超时（${timeoutMs / 1000}秒），请检查网络或模型配置`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Get active model config from localStorage (shared with Settings panel) */
+function getModelConfig() {
+  try {
+    const activeId = localStorage.getItem('activeModelId') || '';
+    if (activeId === '__offline__') return null;
+    const models = JSON.parse(localStorage.getItem('models') || '[]');
+    const active = models.find((m) => m.id === activeId) || models[0];
+    if (!active) return null;
+    return {
+      provider: active.provider || 'openai',
+      model: active.modelName || 'gpt-4o',
+      apiKey: active.apiKey || '',
+      baseUrl: active.baseUrl || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Non-streaming chat completion via backend proxy.
+ * @param {{ role: string, content: string }[]} messages
+ * @param {object} [overrides]
+ * @returns {Promise<{ content: string }>}
+ */
+export async function chatCompletion(messages, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Streaming chat completion via backend SSE proxy.
+ * @param {{ role: string, content: string }[]} messages
+ * @param {(chunk: string) => void} onChunk - called with each text chunk
+ * @param {object} [overrides]
+ * @returns {Promise<string>} full response text
+ */
+export async function chatStream(messages, onChunk, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, STREAM_TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return _readSSEStream(res, onChunk);
+}
+
+// ──────────────────────────────────────────────
+//  A4: legacy per-type generate/template functions removed.
+//  Use generateRecord(typeId, ...) and getTemplate(templateKey, disease)
+//  below instead. generateEMRStream kept (streaming endpoint not unified).
+// ──────────────────────────────────────────────
+
+/**
+ * Generate structured EMR with streaming.
+ * @param {string} disease
+ * @param {object} [patientInfo]
+ * @param {(chunk: string) => void} onChunk
+ * @param {object} [overrides]
+ * @returns {Promise<void>}
+ */
+export async function generateEMRStream(disease, patientInfo = {}, onChunk, overrides = {}) {
+  const cfg = getModelConfig();
+  const res = await fetchWithTimeout(`${BASE}/emr/generate/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      disease,
+      patientInfo,
+      provider: overrides.provider || cfg?.provider,
+      model: overrides.model || cfg?.model,
+      apiKey: overrides.apiKey || cfg?.apiKey,
+      baseUrl: overrides.baseUrl || cfg?.baseUrl,
+    }),
+  }, STREAM_TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  await _readSSEStream(res, onChunk);
+}
+
+/** Internal: read SSE stream from response */
+async function _readSSEStream(response, onChunk) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (payload === '[DONE]') return fullText;
+
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.error) throw new Error(parsed.error);
+          if (parsed.content) {
+            fullText += parsed.content;
+            if (onChunk) onChunk(parsed.content);
+          }
+        } catch (e) {
+          if (e instanceof SyntaxError) continue; // skip malformed lines
+          throw e; // propagate backend errors
+        }
+      }
+    }
+    // Process residual buffer
+    if (buffer.trim()) {
+      const trimmed = buffer.trim();
+      if (trimmed.startsWith('data:')) {
+        const payload = trimmed.slice(5).trim();
+        if (payload !== '[DONE]') {
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.content) {
+              fullText += parsed.content;
+              if (onChunk) onChunk(parsed.content);
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) { /* skip */ } else throw e;
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return fullText;
+}
+
+// ──────────────────────────────────────────────
+//  Prompt Template Management
+// ──────────────────────────────────────────────
+
+/**
+ * Generate record for any type via the unified backend endpoint.
+ * Works for both old 7 types and new registry-driven types.
+ *
+ * @param {string} typeId - e.g. 'firstCourse', 'informedConsent'
+ * @param {object} opts
+ * @param {string} opts.disease
+ * @param {object} [opts.patientInfo]
+ * @param {object} [opts.contextData] - dependent data keyed by storeKey (e.g. { emrData: {...} })
+ * @param {object} [overrides] - provider/model/apiKey/baseUrl overrides
+ * @returns {Promise<{ emr: object|null, content: string, typeId: string, category: string, parseError?: boolean }>}
+ */
+export async function generateRecord(typeId, { disease, patientInfo = {}, contextData = {} } = {}, overrides = {}) {
+  const cfg = getModelConfig();
+  const body = {
+    disease,
+    patientInfo,
+    ...contextData,
+    provider: overrides.provider || cfg?.provider,
+    model: overrides.model || cfg?.model,
+    apiKey: overrides.apiKey || cfg?.apiKey,
+    baseUrl: overrides.baseUrl || cfg?.baseUrl,
+  };
+  const res = await fetchWithTimeout(`${BASE}/records/${encodeURIComponent(typeId)}/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Get offline template for a disease by templateKey (A4: unified replacement
+ * for the 6 per-type get*Template functions).
+ * @param {string} templateKey - e.g. 'attending', 'chief', 'preop', 'discussion', 'surgery', 'discharge', 'emr'
+ * @param {string} disease
+ * @returns {Promise<{template: object|null}>}
+ */
+export async function getTemplate(templateKey, disease) {
+  const res = await fetchWithTimeout(`${BASE}/templates/${encodeURIComponent(templateKey)}/${encodeURIComponent(disease)}`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function listPromptTemplates() {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getPromptTemplate(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function createPromptTemplate(name, basedOn = 'default') {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, basedOn }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function savePromptTemplate(name, data) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function duplicatePromptTemplate(name, targetName) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}/duplicate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetName }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deletePromptTemplate(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getActivePromptTemplate() {
+  const res = await fetchWithTimeout(`${BASE}/prompts/active`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function setActivePromptTemplate(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/active`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getMergedPromptTemplate() {
+  const res = await fetchWithTimeout(`${BASE}/prompts/merged`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function syncPromptTemplate(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}/sync`, {
+    method: 'POST',
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getPromptTemplateStatus(name) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/templates/${encodeURIComponent(name)}/status`, {}, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Get assembled system + user prompt for a given type and context.
+ * Used by ChatArea to inherit PromptEditor templates.
+ */
+export async function getPromptPreview(templateKey, context = {}) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/preview/${encodeURIComponent(templateKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ context }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Create a skeleton entry in the active prompt template for a new type.
+ */
+export async function createPromptTemplateSkeleton(templateKey, label) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/skeleton`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ templateKey, label }),
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Remove a type from all custom prompt templates.
+ */
+export async function cleanupPromptTemplate(templateKey) {
+  const res = await fetchWithTimeout(`${BASE}/prompts/cleanup/${encodeURIComponent(templateKey)}`, {
+    method: 'POST',
+  }, TIMEOUT);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
