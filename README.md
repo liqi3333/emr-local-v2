@@ -9,10 +9,10 @@ AI 驱动的电子病历系统，支持 **13 种病历文书**（3 大类）、�
 ```bash
 cp .env.example .env   # 可选，无 Key 时自动使用 Mock 模式
 npm install
-npm run dev            # http://localhost:8000
+npm run dev            # http://localhost:8001
 ```
 
-端口冲突时：`lsof -ti:8000 | xargs kill -9`
+端口冲突时：`lsof -ti:8001 | xargs kill -9`
 
 > 需 Node.js 18+。首次运行自动创建 `data/emr-local.db`，无需手动配置。
 
@@ -76,10 +76,10 @@ RAG_AUTO_ROUTE=false
 
 | 页面 | 访问路径 |
 |------|----------|
-| 主界面 | `http://localhost:8000` |
-| 提示词编辑器 | `http://localhost:8000/prompts` |
-| 病历类型配置 | `http://localhost:8000/record-types` |
-| 疾病目录管理 | `http://localhost:8000/diseases` |
+| 主界面 | `http://localhost:8001` |
+| 提示词编辑器 | `http://localhost:8001/prompts` |
+| 病历类型配置 | `http://localhost:8001/record-types` |
+| 疾病目录管理 | `http://localhost:8001/diseases` |
 
 ---
 
