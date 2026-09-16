@@ -14,7 +14,7 @@ const { ensureDefaultRegistry, migrateLegacyTypes } = require('./src/services/re
 const { ensureDefaultDiseaseCategories } = require('./src/services/diseaseRegistry');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 8001;
 
 // ── CORS ──
 app.use(cors({
