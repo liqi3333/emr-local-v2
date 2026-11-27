@@ -336,9 +336,27 @@ function checkSyncStatus(name) {
 //  Prompt assembly
 // ──────────────────────────────────────────────
 
+/**
+ * Remove internal markers, empty values and signature fields before injecting
+ * record data into the prompt. Uses compact JSON (no indentation/newlines) to
+ * reduce prefill tokens for local models.
+ */
+function compactContextData(data) {
+  if (!data || typeof data !== 'object') return data;
+  const clean = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (key.startsWith('_')) continue;
+    if (value === undefined || value === null || value === '') continue;
+    if (/(signed|signature)$/i.test(key)) continue;
+    clean[key] = value;
+  }
+  return clean;
+}
+
 function buildContextString(label, data) {
-  if (!data || Object.keys(data).length === 0) return '';
-  return `\n${label}：\n${JSON.stringify(data, null, 2)}`;
+  const clean = compactContextData(data);
+  if (!clean || Object.keys(clean).length === 0) return '';
+  return `\n${label}：\n${JSON.stringify(clean)}`;
 }
 
 const CONTEXT_LABELS = {
@@ -381,6 +399,9 @@ function replacePlaceholders(text, context) {
   for (const [placeholder, value] of Object.entries(replacements)) {
     result = result.split(placeholder).join(value);
   }
+  // Any remaining {{...}} has no data in this request (e.g. no firstCourse
+  // loaded). Replace it so the model never receives a raw placeholder.
+  result = result.replace(/\{\{\s*[^{}]+\s*\}\}/g, '（未提供）');
   return result;
 }
 
@@ -397,14 +418,15 @@ function assembleFieldBlock(typeConfig, registryTypeConfig) {
 
   const templateFields = typeConfig.fields || {};
 
-  // Use registry fields as the source of truth for field list and order
+  // Use registry fields as the source of truth for field list and order.
+  // Signature fields are skipped — the app fills them with empty strings.
   const fieldKeys = (registryTypeConfig?.fields || [])
-    .filter(f => f.enabled !== false)
+    .filter(f => f.enabled !== false && !/(signed|signature)$/i.test(f.key))
     .map(f => f.key);
 
   // Fallback: include fields that exist only in the template (legacy custom fields)
   for (const key of Object.keys(templateFields)) {
-    if (!registryFieldsMap[key]) {
+    if (!registryFieldsMap[key] && !/(signed|signature)$/i.test(key)) {
       fieldKeys.push(key);
     }
   }
@@ -416,7 +438,7 @@ function assembleFieldBlock(typeConfig, registryTypeConfig) {
     fieldObj[key] = description;
   }
 
-  return JSON.stringify(fieldObj, null, 2);
+  return JSON.stringify(fieldObj);
 }
 
 function buildFromRegistryFields(registryTypeConfig, context) {
@@ -430,9 +452,10 @@ function buildFromRegistryFields(registryTypeConfig, context) {
   const fieldObj = {};
   for (const field of registryTypeConfig.fields || []) {
     if (field.enabled === false) continue;
+    if (/(signed|signature)$/i.test(field.key)) continue;
     fieldObj[field.key] = field.description;
   }
-  const fieldBlock = JSON.stringify(fieldObj, null, 2);
+  const fieldBlock = JSON.stringify(fieldObj);
 
   const endingPrompt = '确保内容专业、准确、符合临床规范，所有字段互相对应、逻辑自洽。';
 

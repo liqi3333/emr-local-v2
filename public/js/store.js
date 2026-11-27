@@ -31,6 +31,7 @@ class Store {
       activeCategory: 'clinicalRecords', // current category ID
       activeType: 'firstCourse',         // current type ID within active category
       currentRecordId: null,             // ID of the record being edited (null = new)
+      lastGenerationStats: null,         // { typeId, ...stats } for the last generation
 
       // ─── Disease catalog state ───
       diseaseCategories: null, // Array of category objects from /api/diseases, null until loaded
@@ -108,6 +109,7 @@ class Store {
       activeCategory: 'clinicalRecords',
       activeType: 'firstCourse',
       currentRecordId: null,
+      lastGenerationStats: null,
       ...keep,
     };
     this._notify(Object.keys(this._state), prevState);
@@ -137,8 +139,8 @@ class Store {
         'nursingAssessmentData', 'nursingPlanData', 'nursingRecordSheetData',
       ].forEach(k => { slots[k] = null; });
     }
-    this._state = { ...this._state, ...slots, currentRecordId: null };
-    this._notify([...Object.keys(slots), 'currentRecordId'], prevState);
+    this._state = { ...this._state, ...slots, currentRecordId: null, lastGenerationStats: null };
+    this._notify([...Object.keys(slots), 'currentRecordId', 'lastGenerationStats'], prevState);
   }
 
   /**
@@ -192,6 +194,44 @@ class Store {
     return this._state[typeConfig.storeKey] || null;
   }
 
+  /**
+   * Collect data for a type's contextDependencies (and optionally the type
+   * itself), keyed by storeKey. Used by generation and AI chat so dependent
+   * records (e.g. firstCourse for attendingRound) are always included.
+   */
+  buildContextData(typeId = this._state.activeType, { includeCurrent = false } = {}) {
+    const typeConfig = this.getTypeConfig(typeId);
+    const context = {};
+    if (!typeConfig) return context;
+
+    const add = (id) => {
+      const cfg = this.getTypeConfig(id);
+      if (!cfg || !cfg.storeKey) return;
+      const data = this._sanitizeContextData(this._state[cfg.storeKey]);
+      if (data) context[cfg.storeKey] = data;
+    };
+
+    const deps = Array.isArray(typeConfig.contextDependencies)
+      ? typeConfig.contextDependencies
+      : [];
+    for (const depId of deps) add(depId);
+    if (includeCurrent) add(typeConfig.id);
+
+    return context;
+  }
+
+  /** Strip client-only markers (e.g. _patientId) from context data. */
+  _sanitizeContextData(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    const clean = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith('_')) continue;
+      if (value === undefined || value === null || value === '') continue;
+      clean[key] = value;
+    }
+    return Object.keys(clean).length > 0 ? clean : null;
+  }
+
   /** Set data for a given typeId (writes to the appropriate store key) */
   setTypeData(typeId, data) {
     const typeConfig = this.getTypeConfig(typeId);
@@ -217,11 +257,17 @@ class Store {
     const categoryId = typeConfig
       ? this._findCategoryForType(typeId)
       : this._state.activeCategory;
-    this.setState({
+    const patch = {
       activeType: typeId,
       activeCategory: categoryId || this._state.activeCategory,
       activeTab: typeId, // backward compat for old EmrPreview.js
-    });
+    };
+    // Switching types must not keep a record id from another type — otherwise
+    // saving the new type would overwrite the record that was just loaded.
+    if (typeId !== this._state.activeType) {
+      patch.currentRecordId = null;
+    }
+    this.setState(patch);
   }
 
   /** Find which category contains the given typeId */

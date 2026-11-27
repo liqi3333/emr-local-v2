@@ -5,6 +5,7 @@ const { createRateLimiter } = require('../middleware/rateLimit');
 const { findType, getRegistry } = require('../services/recordRegistry');
 const { mockGenerate } = require('../services/ai-mock');
 const knowledge = require('../services/knowledge');
+const db = require('../services/database');
 
 const router = Router();
 
@@ -29,8 +30,11 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'messages is required and must be a non-empty array' });
     }
 
-    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl);
-    res.json({ content });
+    let stats = null;
+    const content = await ai.callAI(provider, model, messages, apiKey, baseUrl, (s) => {
+      stats = s;
+    });
+    res.json({ content, stats });
   } catch (err) {
     console.error('[POST /api/chat]', err.message);
     res.status(500).json({ error: err.message });
@@ -61,7 +65,10 @@ router.post('/chat/stream', async (req, res) => {
   res.on('close', () => { aborted = true; });
 
   try {
-    const stream = ai.streamAI(provider, model, messages, apiKey, baseUrl);
+    let stats = null;
+    const stream = ai.streamAI(provider, model, messages, apiKey, baseUrl, (s) => {
+      stats = s;
+    });
 
     for await (const chunk of stream) {
       if (aborted) break;
@@ -69,6 +76,9 @@ router.post('/chat/stream', async (req, res) => {
     }
 
     if (!aborted) {
+      if (stats) {
+        res.write(`data: ${JSON.stringify({ type: 'done', stats })}\n\n`);
+      }
       res.write('data: [DONE]\n\n');
     }
   } catch (err) {
@@ -116,10 +126,45 @@ function _normalizeEmr(emr) {
 }
 
 /**
+ * Look up the latest saved record for a dependent type (patient + disease).
+ * Used when the client didn't send dependency data — e.g. after a page
+ * refresh the user generates without loading the firstCourse record first.
+ * Returns the record's field map, or null when nothing is found.
+ */
+function _latestDependencyData(patientId, depType, disease) {
+  try {
+    const rows = db.getRecords(patientId, { type: depType.id });
+    const row = rows.find(r => !disease || r.disease === disease);
+    if (!row) return null;
+
+    let content = {};
+    try {
+      content = JSON.parse(row.content || '{}');
+    } catch { content = {}; }
+
+    if (!content || Object.keys(content).length === 0) {
+      // Legacy row without content JSON — rebuild from the data columns.
+      const full = db.getRecordById(row.id);
+      if (full) {
+        for (const field of depType.fields || []) {
+          if (field.enabled === false) continue;
+          content[field.key] = full[field.key] || '';
+        }
+      }
+    }
+
+    return content && Object.keys(content).length > 0 ? content : null;
+  } catch (err) {
+    console.warn('[generate] dependency lookup failed:', err.message);
+    return null;
+  }
+}
+
+/**
  * Core generation routine shared by the unified endpoint and the
  * deprecated legacy endpoints. Returns { content, emr, parseError? }.
  */
-async function _generateCore(typeConfig, categoryId, reqBody) {
+async function _generateCore(typeConfig, categoryId, reqBody, onToken = null, onStats = null) {
   const {
     disease,
     patientInfo = {},
@@ -144,22 +189,46 @@ async function _generateCore(typeConfig, categoryId, reqBody) {
       for (const cat of registry.categories) {
         const depType = cat.types.find(t => t.id === depId);
         if (depType) {
-          context[depType.storeKey] = restData[depType.storeKey] || {};
+          let depData = restData[depType.storeKey];
+          const isEmpty = !depData
+            || typeof depData !== 'object'
+            || Object.keys(depData).length === 0;
+          if (isEmpty && patientInfo && patientInfo.id) {
+            depData = _latestDependencyData(patientInfo.id, depType, disease);
+          }
+          context[depType.storeKey] = depData || {};
           break;
         }
       }
     }
   }
 
-  const isMockMode = !apiKey;
+  // Knowledge-base injection mode: off | first-only | always
+  // - off: never inject (best for slow local models)
+  // - first-only: only types without contextDependencies (e.g. 首次病程录)
+  // - always: old behaviour (inject for every type)
+  const knowledgeMode = (process.env.KNOWLEDGE_MODE || 'first-only').toLowerCase();
+  const shouldInjectKnowledge =
+    knowledgeMode === 'always' ||
+    (knowledgeMode === 'first-only' &&
+      (!typeConfig.contextDependencies || typeConfig.contextDependencies.length === 0));
+  const kb = shouldInjectKnowledge
+    ? knowledge.getKnowledgeForType(disease, typeConfig.knowledgeFiles)
+    : { text: '', files: [], truncated: false };
+
+  // Ollama 本地模型无需 API Key，ai.hasApiKey 会把 ollama 视为可用，
+  // 否则本地部署时会被静默降级为 Mock 数据。
+  const isMockMode = !ai.hasApiKey(provider, apiKey);
   let content;
+  let stats = null;
   if (isMockMode) {
     content = mockGenerate(typeConfig, disease, context);
+    if (onToken) onToken(content);
+    if (process.env.DEBUG_PROMPT === 'true') {
+      console.log(`[prompt] type=${typeConfig.id} mock=true kb=${kb.text.length}`);
+    }
   } else {
     let systemPrompt = promptTemplates.assembleSystemPrompt(typeConfig.templateKey, context, typeConfig);
-    // F1: RAG injection — use type-specific knowledge files if configured,
-    // otherwise fall back to full knowledge injection for backward compatibility.
-    const kb = knowledge.getKnowledgeForType(disease, typeConfig.knowledgeFiles);
     if (kb.text) {
       systemPrompt += `\n\n---\n以下是与"${disease}"相关的专业知识库内容，请在生成时严格参考，确保内容符合临床指南：\n${kb.text}`;
     }
@@ -180,10 +249,38 @@ async function _generateCore(typeConfig, categoryId, reqBody) {
     }
 
     const userPrompt = promptTemplates.assembleUserPrompt(typeConfig.templateKey, context, typeConfig);
-    content = await ai.callAI(useProvider, useModel, [
+    if (process.env.DEBUG_PROMPT === 'true') {
+      // Lengths only — never log patient content.
+      const depLens = Object.entries(context)
+        .filter(([key]) => key !== 'disease' && key !== 'patientInfo')
+        .map(([key, value]) => `${key}:${JSON.stringify(value).length}`)
+        .join(', ');
+      console.log(
+        `[prompt] type=${typeConfig.id} system=${systemPrompt.length} user=${userPrompt.length} kb=${kb.text.length} deps=[${depLens}]`,
+      );
+    }
+    const messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
-    ], useApiKey, useBaseUrl);
+    ];
+
+    if (onToken) {
+      // 流式：逐 token 回调，便于前端展示进度（本地小模型较慢）
+      let acc = '';
+      for await (const chunk of ai.streamAI(useProvider, useModel, messages, useApiKey, useBaseUrl, (s) => {
+        stats = s;
+        if (onStats) onStats(s);
+      })) {
+        acc += chunk;
+        onToken(chunk);
+      }
+      content = acc;
+    } else {
+      content = await ai.callAI(useProvider, useModel, messages, useApiKey, useBaseUrl, (s) => {
+        stats = s;
+        if (onStats) onStats(s);
+      });
+    }
   }
 
   // Try to parse JSON response
@@ -199,9 +296,9 @@ async function _generateCore(typeConfig, categoryId, reqBody) {
       }
     }
     const merged = { ...defaults, ...emr };
-    return { content, emr: _normalizeEmr(merged), typeId: typeConfig.id, category: categoryId };
+    return { content, emr: _normalizeEmr(merged), typeId: typeConfig.id, category: categoryId, stats };
   } catch {
-    return { content, emr: null, parseError: true, typeId: typeConfig.id, category: categoryId };
+    return { content, emr: null, parseError: true, typeId: typeConfig.id, category: categoryId, stats };
   }
 }
 
@@ -222,6 +319,62 @@ router.post('/records/:typeId/generate', async (req, res) => {
     if (err.status) return res.status(err.status).json({ error: err.message });
     console.error('[POST /api/records/:typeId/generate]', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+//  POST /api/records/:typeId/generate/stream  –  Streaming record generation (SSE)
+//  事件顺序：{type:'chunk',content} × N → {type:'done',emr,...} → [DONE]
+// ──────────────────────────────────────────────
+router.post('/records/:typeId/generate/stream', async (req, res) => {
+  const { typeId } = req.params;
+  const result = findType(typeId);
+  if (!result) {
+    return res.status(404).json({ error: `Record type '${typeId}' not found` });
+  }
+  if (!req.body || !req.body.disease) {
+    return res.status(400).json({ error: 'disease is required' });
+  }
+
+  const { type: typeConfig, category } = result;
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  let aborted = false;
+  res.on('close', () => { aborted = true; });
+
+  let received = 0;
+  try {
+    const out = await _generateCore(typeConfig, category.id, req.body, (chunk) => {
+      if (aborted) return;
+      received += chunk.length;
+      res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk, received })}\n\n`);
+    });
+
+    if (!aborted) {
+      res.write(`data: ${JSON.stringify({
+        type: 'done',
+        emr: out.emr,
+        content: out.content,
+        typeId: out.typeId,
+        category: out.category,
+        parseError: !!out.parseError,
+        stats: out.stats,
+      })}\n\n`);
+      res.write('data: [DONE]\n\n');
+    }
+  } catch (err) {
+    console.error('[POST /api/records/:typeId/generate/stream]', err.message);
+    if (!aborted) {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+    }
+  } finally {
+    if (!aborted) res.end();
   }
 });
 

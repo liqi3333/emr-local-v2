@@ -57,20 +57,56 @@ async function updateModelBadge() {
 }
 
 // ─── Loading Overlay ───
+let loadingTimer = null;
+let loadingStartedAt = 0;
+
+function stopLoadingTimer() {
+  if (loadingTimer) {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
+}
+
 function renderLoading() {
   const chatArea = document.getElementById('chatMessages');
   if (!chatArea) return;
 
-  // Remove existing loading overlays
-  chatArea.querySelectorAll('.loading-overlay').forEach((el) => el.remove());
-
-  if (store.state.loading && store.state.loadingLabel) {
-    const overlay = document.createElement('div');
-    overlay.className = 'loading-overlay';
-    overlay.innerHTML = `<div class="spinner"></div><span>${store.state.loadingLabel}</span>`;
-    chatArea.appendChild(overlay);
-    chatArea.scrollTop = chatArea.scrollHeight;
+  // 结束：移除覆盖层
+  if (!store.state.loading || !store.state.loadingLabel) {
+    chatArea.querySelectorAll('.loading-overlay').forEach((el) => el.remove());
+    stopLoadingTimer();
+    loadingStartedAt = 0;
+    return;
   }
+
+  // 复用同一个覆盖层，避免进度更新时计时器被重置
+  let overlay = chatArea.querySelector('.loading-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = 'loading-overlay';
+    overlay.innerHTML = `
+      <div class="spinner"></div>
+      <span class="loading-label"></span>
+      <span class="loading-elapsed"></span>
+    `;
+    chatArea.appendChild(overlay);
+    loadingStartedAt = Date.now();
+  }
+
+  overlay.querySelector('.loading-label').textContent = store.state.loadingLabel;
+  chatArea.scrollTop = chatArea.scrollHeight;
+
+  // 本地模型（CPU 推理）较慢，显示已等待时长，避免看起来像卡死
+  const elapsedEl = overlay.querySelector('.loading-elapsed');
+  const tick = () => {
+    const sec = Math.floor((Date.now() - loadingStartedAt) / 1000);
+    elapsedEl.textContent =
+      sec < 20
+        ? ` · 已等待 ${sec} 秒`
+        : ` · 已等待 ${sec} 秒（本地模型推理较慢，请耐心等待）`;
+  };
+  tick();
+  if (!loadingTimer) loadingTimer = setInterval(tick, 1000);
 }
 
 // ─── Chat Count ───
@@ -198,7 +234,8 @@ function renderCategoryTabs() {
       if (cat && cat.types.length > 0) {
         const firstEnabledType = cat.types.find(t => t.enabled !== false);
         if (firstEnabledType) {
-          store.setState({ activeCategory: catId, activeType: firstEnabledType.id });
+          // Let setActiveType resolve the category and reset currentRecordId —
+          // pre-setting activeType would bypass that protection.
           store.setActiveType(firstEnabledType.id);
           renderCategoryTabs();
           renderTypeTabs();

@@ -7,8 +7,10 @@
  *   - Google Gemini
  *
  * Exports:
- *   callAI(provider, model, messages, apiKey, baseUrl) → string
- *   streamAI(provider, model, messages, apiKey, baseUrl) → AsyncGenerator<string>
+ *   callAI(provider, model, messages, apiKey, baseUrl, onStats?) → string
+ *   streamAI(provider, model, messages, apiKey, baseUrl, onStats?) → AsyncGenerator<string>
+ *
+ *   onStats is called with normalized Ollama timing data when available.
  */
 
 // ──────────────────────────────────────────────
@@ -37,7 +39,7 @@ const DEFAULTS = {
   },
   ollama: {
     baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1",
-    model: process.env.OLLAMA_MODEL || "qwen2.5:1.5b",
+    model: process.env.OLLAMA_MODEL || "qwen3:1.7b",
     apiKey: process.env.OLLAMA_API_KEY || "",
   },
 };
@@ -83,7 +85,14 @@ function buildRequest({
 
   switch (provider) {
     case "ollama": {
-      url = `${resolvedBase.replace(/\/+$/, "")}/chat/completions`;
+      // Use Ollama's native /api/chat endpoint so the final chunk contains
+      // timing stats (prompt_eval_duration, eval_duration, etc.). The OpenAI
+      // compatibility layer does not expose those fields.
+      const nativeBase = (
+        process.env.OLLAMA_NATIVE_BASE_URL ||
+        resolvedBase.replace(/\/v1\/?$/, "")
+      ).replace(/\/+$/, "");
+      url = `${nativeBase}/api/chat`;
       headers = { "Content-Type": "application/json" };
       if (resolvedKey) headers.Authorization = `Bearer ${resolvedKey}`;
       body = {
@@ -91,6 +100,12 @@ function buildRequest({
         messages,
         stream,
       };
+      // qwen3 等模型默认开启「思考」，在 CPU 推理下会先输出上千个隐藏
+      // reasoning token（且 content 始终为空，导致生成失败/看似无响应）。
+      // 默认关闭；需要质量优先时在 .env 设置 OLLAMA_THINK=true。
+      if (process.env.OLLAMA_THINK !== "true") {
+        body.think = false;
+      }
       break;
     }
 
@@ -193,8 +208,9 @@ function extractResponseText(provider, data) {
   switch (provider) {
     case "openai":
     case "deepseek":
-    case "ollama":
       return data.choices?.[0]?.message?.content || "";
+    case "ollama":
+      return data.message?.content || "";
     case "claude":
       return data.content?.map((c) => c.text).join("") || "";
     case "gemini":
@@ -215,13 +231,17 @@ function extractStreamChunk(provider, parsed) {
 
   switch (provider) {
     case "openai":
-    case "deepseek":
-    case "ollama": {
+    case "deepseek": {
       const choice = parsed.choices?.[0];
       if (!choice) return null;
       // Finish reason indicates end
       if (choice.finish_reason) return null;
       return choice.delta?.content || null;
+    }
+    case "ollama": {
+      // Native Ollama puts the text in message.content. The final done:true
+      // chunk usually has empty content, but keep it if the model sent a token.
+      return parsed.message?.content || null;
     }
     case "claude": {
       if (parsed.type === "content_block_delta" && parsed.delta?.text) {
@@ -240,14 +260,66 @@ function extractStreamChunk(provider, parsed) {
   }
 }
 
+/**
+ * Normalize Ollama native stats. Durations are nanoseconds in the API;
+ * convert to milliseconds and compute tokens/second.
+ */
+function normalizeOllamaStats(data) {
+  const ms = (ns) => (typeof ns === "number" && Number.isFinite(ns) ? ns / 1e6 : null);
+  const evalCount = typeof data.eval_count === "number" ? data.eval_count : null;
+  const evalDurationMs = ms(data.eval_duration);
+  return {
+    provider: "ollama",
+    totalDurationMs: ms(data.total_duration),
+    loadDurationMs: ms(data.load_duration),
+    promptEvalCount: typeof data.prompt_eval_count === "number" ? data.prompt_eval_count : null,
+    promptEvalDurationMs: ms(data.prompt_eval_duration),
+    evalCount,
+    evalDurationMs,
+    tokensPerSecond: evalCount != null && evalDurationMs
+      ? evalCount / (evalDurationMs / 1000)
+      : null,
+  };
+}
+
 // ──────────────────────────────────────────────
 //  SSE line reader (async generator)
 // ──────────────────────────────────────────────
 
-async function* readSSEStream(body, provider) {
+async function* readSSEStream(body, provider, onStats) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+
+  // Parses one line. Returns { done: true } for the end sentinel, { chunk }
+  // for a text chunk, or null when the line carries no text.
+  const handleLine = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("event:")) return null;
+
+    let payload;
+    if (trimmed.startsWith("data:")) {
+      payload = trimmed.slice(5).trim();
+      if (payload === "[DONE]") return { done: true };
+    } else if (provider === "ollama") {
+      // Native Ollama streams NDJSON (one JSON object per line).
+      payload = trimmed;
+    } else {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(payload);
+      if (provider === "ollama" && parsed.done && onStats) {
+        onStats(normalizeOllamaStats(parsed));
+      }
+      const chunk = extractStreamChunk(provider, parsed);
+      return chunk ? { chunk } : null;
+    } catch {
+      // Skip malformed JSON lines
+      return null;
+    }
+  };
 
   try {
     while (true) {
@@ -260,43 +332,17 @@ async function* readSSEStream(body, provider) {
       buffer = lines.pop() || "";
 
       for (const line of lines) {
-        const trimmed = line.trim();
-
-        // Skip empty lines and event type lines (data is what we need)
-        if (!trimmed || trimmed.startsWith("event:")) continue;
-        if (!trimmed.startsWith("data:")) continue;
-
-        // Extract the JSON payload after "data: "
-        const payload = trimmed.slice(5).trim();
-
-        // OpenAI sends "[DONE]" as the final signal
-        if (payload === "[DONE]") return;
-
-        try {
-          const parsed = JSON.parse(payload);
-          const chunk = extractStreamChunk(provider, parsed);
-          if (chunk) yield chunk;
-        } catch {
-          // Skip malformed JSON lines
-        }
+        const result = handleLine(line);
+        if (!result) continue;
+        if (result.done) return;
+        if (result.chunk) yield result.chunk;
       }
     }
 
     // Process remaining buffer content
     if (buffer.trim()) {
-      const trimmed = buffer.trim();
-      if (trimmed.startsWith("data:")) {
-        const payload = trimmed.slice(5).trim();
-        if (payload !== "[DONE]") {
-          try {
-            const parsed = JSON.parse(payload);
-            const chunk = extractStreamChunk(provider, parsed);
-            if (chunk) yield chunk;
-          } catch {
-            // ignore
-          }
-        }
-      }
+      const result = handleLine(buffer);
+      if (result && !result.done && result.chunk) yield result.chunk;
     }
   } finally {
     reader.releaseLock();
@@ -310,14 +356,16 @@ async function* readSSEStream(body, provider) {
 const { mockCallAI, mockStreamAI } = require("./ai-mock");
 
 function hasApiKey(provider, apiKey) {
-  if (provider && resolveProvider(provider) === "ollama") return true;
+  const resolved = resolveProvider(provider);
+  // Ollama 是本地服务，不需要 API Key
+  if (resolved === "ollama") return true;
   if (apiKey) return true;
-  const config = DEFAULTS[resolveProvider(provider)];
+  const config = DEFAULTS[resolved];
   if (config && config.apiKey) return true;
   return false;
 }
 
-async function callAI(provider, model, messages, apiKey, baseUrl) {
+async function callAI(provider, model, messages, apiKey, baseUrl, onStats = null) {
 
   // Use mock mode if no API key
   if (!hasApiKey(provider, apiKey)) {
@@ -343,7 +391,7 @@ async function callAI(provider, model, messages, apiKey, baseUrl) {
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(120_000), // 2 min timeout
+        signal: AbortSignal.timeout(300_000), // 5 min timeout (本地小模型 CPU 推理较慢)
       });
 
       if (!response.ok) {
@@ -354,6 +402,9 @@ async function callAI(provider, model, messages, apiKey, baseUrl) {
       }
 
       const data = await response.json();
+      if (resolvedProvider === "ollama" && onStats) {
+        onStats(normalizeOllamaStats(data));
+      }
       const text = extractResponseText(resolvedProvider, data);
       if (!text) {
         throw new Error(`[${resolvedProvider}] Empty response from API`);
@@ -375,7 +426,7 @@ async function callAI(provider, model, messages, apiKey, baseUrl) {
  * Streaming AI call.
  * Returns an AsyncGenerator that yields text chunks.
  */
-async function* streamAI(provider, model, messages, apiKey, baseUrl) {
+async function* streamAI(provider, model, messages, apiKey, baseUrl, onStats = null) {
 
   // Use mock mode if no API key
   if (!hasApiKey(provider, apiKey)) {
@@ -397,7 +448,7 @@ async function* streamAI(provider, model, messages, apiKey, baseUrl) {
     method: "POST",
     headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(180_000), // 3 min timeout
+    signal: AbortSignal.timeout(600_000), // 10 min timeout (流式输出，本地模型较慢)
   });
 
   if (!response.ok) {
@@ -413,7 +464,7 @@ async function* streamAI(provider, model, messages, apiKey, baseUrl) {
     );
   }
 
-  yield* readSSEStream(response.body, resolvedProvider);
+  yield* readSSEStream(response.body, resolvedProvider, onStats);
 }
 
-module.exports = { callAI, streamAI, resolveProvider };
+module.exports = { callAI, streamAI, resolveProvider, hasApiKey };

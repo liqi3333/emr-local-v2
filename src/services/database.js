@@ -8,27 +8,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-// 数据目录：支持 Electron userData 或默认 data 目录
-function _resolveDataDir() {
-  // 优先使用环境变量（Electron 主进程设置）
-  if (process.env.EMR_DATA_DIR) {
-    return process.env.EMR_DATA_DIR;
-  }
-  // 检测 Electron 环境
-  try {
-    const { app } = require('electron');
-    if (app && app.isPackaged) {
-      return path.join(app.getPath('userData'), 'data');
-    }
-  } catch (e) {
-    // 非 Electron 环境，忽略
-  }
-  // 默认：项目根目录下的 data/
-  return path.join(__dirname, '../../data');
-}
-
-const DB_DIR = _resolveDataDir();
-const DB_PATH = path.join(DB_DIR, 'emr-local.db');
+const DB_PATH = path.join(__dirname, '../../data/emr-local.db');
+const DB_DIR = path.dirname(DB_PATH);
 
 // Ensure data directory exists before opening the database
 if (!fs.existsSync(DB_DIR)) {

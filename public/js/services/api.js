@@ -5,8 +5,8 @@
  */
 
 const BASE = '/api';
-const TIMEOUT = 60_000; // 60s for non-streaming calls
-const STREAM_TIMEOUT = 120_000; // 120s for streaming calls
+const TIMEOUT = 300_000; // 300s for non-streaming calls (本地模型推理较慢)
+const STREAM_TIMEOUT = 660_000; // 660s for streaming calls (流式可长时间输出)
 
 /** Helper: fetch with timeout */
 async function fetchWithTimeout(url, options, timeoutMs) {
@@ -75,7 +75,7 @@ export async function chatCompletion(messages, overrides = {}) {
  * @param {{ role: string, content: string }[]} messages
  * @param {(chunk: string) => void} onChunk - called with each text chunk
  * @param {object} [overrides]
- * @returns {Promise<string>} full response text
+ * @returns {Promise<{ text: string, stats: object|null }>} full text + generation stats
  */
 export async function chatStream(messages, onChunk, overrides = {}) {
   const cfg = getModelConfig();
@@ -138,6 +138,7 @@ async function _readSSEStream(response, onChunk) {
   const decoder = new TextDecoder();
   let buffer = '';
   let fullText = '';
+  let stats = null;
 
   try {
     while (true) {
@@ -152,11 +153,12 @@ async function _readSSEStream(response, onChunk) {
         const trimmed = line.trim();
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const payload = trimmed.slice(5).trim();
-        if (payload === '[DONE]') return fullText;
+        if (payload === '[DONE]') return { text: fullText, stats };
 
         try {
           const parsed = JSON.parse(payload);
           if (parsed.error) throw new Error(parsed.error);
+          if (parsed.stats) stats = parsed.stats;
           if (parsed.content) {
             fullText += parsed.content;
             if (onChunk) onChunk(parsed.content);
@@ -176,6 +178,7 @@ async function _readSSEStream(response, onChunk) {
           try {
             const parsed = JSON.parse(payload);
             if (parsed.error) throw new Error(parsed.error);
+            if (parsed.stats) stats = parsed.stats;
             if (parsed.content) {
               fullText += parsed.content;
               if (onChunk) onChunk(parsed.content);
@@ -190,7 +193,7 @@ async function _readSSEStream(response, onChunk) {
     reader.releaseLock();
   }
 
-  return fullText;
+  return { text: fullText, stats };
 }
 
 // ──────────────────────────────────────────────
@@ -230,6 +233,86 @@ export async function generateRecord(typeId, { disease, patientInfo = {}, contex
     throw new Error(err.error || `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+/**
+ * 流式生成病历（SSE）。适合本地小模型：边生成边回调进度，且不会因
+ * 请求过长而被一次性超时中断。
+ * @param {string} typeId
+ * @param {object} opts - { disease, patientInfo, contextData }
+ * @param {(info: {received: number}) => void} [onProgress]
+ * @param {object} [overrides] - provider/model/apiKey/baseUrl
+ * @returns {Promise<{ emr: object|null, content: string, typeId: string, category: string, parseError?: boolean }>}
+ */
+export async function generateRecordStream(typeId, { disease, patientInfo = {}, contextData = {} } = {}, onProgress, overrides = {}) {
+  const cfg = getModelConfig();
+  const body = {
+    disease,
+    patientInfo,
+    ...contextData,
+    provider: overrides.provider || cfg?.provider,
+    model: overrides.model || cfg?.model,
+    apiKey: overrides.apiKey || cfg?.apiKey,
+    baseUrl: overrides.baseUrl || cfg?.baseUrl,
+  };
+
+  const res = await fetchWithTimeout(
+    `${BASE}/records/${encodeURIComponent(typeId)}/generate/stream`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    STREAM_TIMEOUT,
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = null;
+
+  const handlePayload = (payload) => {
+    if (!payload || payload === '[DONE]') return;
+    let evt;
+    try {
+      evt = JSON.parse(payload);
+    } catch {
+      return; // ignore malformed line
+    }
+    if (evt.error) throw new Error(evt.error);
+    if (evt.type === 'chunk') {
+      if (onProgress) onProgress({ received: evt.received || 0 });
+    } else if (evt.type === 'done') {
+      result = evt;
+    }
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        handlePayload(trimmed.slice(5).trim());
+      }
+    }
+    const rest = buffer.trim();
+    if (rest.startsWith('data:')) handlePayload(rest.slice(5).trim());
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!result) throw new Error('生成中断，未收到完整结果');
+  return result;
 }
 
 /**

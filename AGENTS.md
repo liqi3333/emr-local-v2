@@ -5,15 +5,15 @@
 ```bash
 npm install
 cp .env.example .env   # 可选，无 Key 时自动使用 mock 模式
-npm run dev             # node --watch 热重载，端口 8001
-# 打开 http://localhost:8001
+npm run dev             # node --watch 热重载，端口 8000
+# 打开 http://localhost:8000
 ```
 
 ## 端口冲突
 
-端口 8001 经常卡死，启动前先杀进程：
+端口 8000 经常卡死，启动前先杀进程：
 ```bash
-lsof -ti:8001 | xargs kill -9
+lsof -ti:8000 | xargs kill -9
 ```
 
 ## 架构

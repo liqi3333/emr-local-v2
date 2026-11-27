@@ -10,11 +10,11 @@ const settingsRouter = require('./src/routes/settings');
 const diseasesRouter = require('./src/routes/diseases');
 const knowledgeRouter = require('./src/routes/knowledge');
 const evolutionRouter = require('./src/routes/evolution');
-const { ensureDefaultRegistry, migrateLegacyTypes } = require('./src/services/recordRegistry');
+const { ensureDefaultRegistry, migrateLegacyTypes, migrateDependencyChain } = require('./src/services/recordRegistry');
 const { ensureDefaultDiseaseCategories } = require('./src/services/diseaseRegistry');
 
 const app = express();
-const PORT = process.env.PORT || 8001;
+const PORT = process.env.PORT || 8000;
 
 // ── CORS ──
 app.use(cors({
@@ -62,6 +62,7 @@ app.get('*', (req, res) => {
 // ── Initialize registry on startup ──
 ensureDefaultRegistry();
 migrateLegacyTypes();
+migrateDependencyChain();
 ensureDefaultDiseaseCategories();
 
 // ── Start server ──

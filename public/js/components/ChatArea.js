@@ -15,6 +15,11 @@
  */
 import { store } from '../store.js';
 import * as api from '../services/api.js';
+import { formatGenerationStats } from '../utils/stats.js';
+
+// Keep the chat prompt bounded so prefill time does not grow with history.
+const MAX_HISTORY_MESSAGES = 8;
+const MAX_HISTORY_CHARS = 2400;
 
 export class ChatArea {
   constructor(containerEl, inputEl, sendBtnEl) {
@@ -94,6 +99,30 @@ export class ChatArea {
   //  Send message (streaming)
   // ────────────────────────────────────────────────────────────────
 
+  /**
+   * Build the API message array with a bounded recent-history window.
+   * Keeps the most recent messages, always keeps the latest message, and
+   * drops leading assistant messages so the conversation starts cleanly.
+   */
+  _buildApiMessages() {
+    const all = store.state.chatMessages
+      .filter((m) => m.content)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    const kept = [];
+    let chars = 0;
+    for (let i = all.length - 1; i >= 0; i--) {
+      const msg = all[i];
+      if (kept.length >= MAX_HISTORY_MESSAGES) break;
+      if (kept.length > 0 && chars + msg.content.length > MAX_HISTORY_CHARS) break;
+      kept.unshift(msg);
+      chars += msg.content.length;
+    }
+
+    while (kept.length > 0 && kept[0].role === 'assistant') kept.shift();
+    return kept;
+  }
+
   async sendMessage() {
     const text = this.input.value.trim();
     if (!text || store.state.loading) return;
@@ -117,10 +146,8 @@ export class ChatArea {
     let msgs = [...store.state.chatMessages, aiMsg];
     store.setState({ chatMessages: msgs, loading: true, loadingLabel: 'AI 思考中...', error: null });
 
-    // 3. Build messages array for the API (skip empty streaming placeholders)
-    const apiMessages = store.state.chatMessages
-      .filter((m) => m.content)
-      .map((m) => ({ role: m.role, content: m.content }));
+    // 3. Build messages array for the API (bounded recent history)
+    const apiMessages = this._buildApiMessages();
 
     // Build system context: disease + current EMR data based on active type
     if (store.state.currentDisease) {
@@ -128,20 +155,26 @@ export class ChatArea {
       const typeConfig = store.getTypeConfig(activeType);
       const templateKey = typeConfig?.templateKey || 'emr';
       const tabLabel = typeConfig?.label || activeType;
-      const currentData = store.getActiveTypeData();
+      const contextData = store.buildContextData(activeType, { includeCurrent: true });
 
-      // Build context for prompt assembly
-      const context = { disease: store.state.currentDisease };
-      if (currentData) {
-        const storeKey = typeConfig?.storeKey || 'emrData';
-        context[storeKey] = currentData;
-      }
+      // Build context for prompt assembly. Includes contextDependencies
+      // (e.g. firstCourse for attendingRound), not just the active type.
+      const context = { disease: store.state.currentDisease, ...contextData };
+
+      // The template may not reference the active type's own data (e.g. the
+      // attending template only pulls in firstCourse), so append it explicitly
+      // to let the AI edit the record that is currently on screen.
+      const storeKey = typeConfig?.storeKey;
+      const currentValues = storeKey ? contextData[storeKey] : null;
+      const currentBlock = currentValues
+        ? `\n\n当前【${tabLabel}】病历内容：\n${JSON.stringify(currentValues)}`
+        : '';
 
       try {
         const { systemPrompt: templatePrompt } = await api.getPromptPreview(templateKey, context);
 
         // Append chat-specific constraints to the template prompt
-        const systemContent = templatePrompt + `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改【${tabLabel}】的病历。\n\n如果用户要求修改病历，请严格按以下步骤执行：\n\n**步骤1：修改用户指定的字段**\n\n**步骤2：保持格式**\n确保每个字段保持专业医学文书格式。\n\n**原则：最小改动**\n只修改与用户要求直接相关的字段。\n\n在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：\n\`\`\`json\n{"fieldName": "修改后完整内容"}\n\`\`\`\n字段名必须与上方字段说明中的英文名一致。如果没有字段被修改，则不要输出 JSON 代码块。`;
+        const systemContent = templatePrompt + currentBlock + `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改【${tabLabel}】的病历。\n\n如果用户要求修改病历，请严格按以下步骤执行：\n\n**步骤1：修改用户指定的字段**\n\n**步骤2：保持格式**\n确保每个字段保持专业医学文书格式。\n\n**原则：最小改动**\n只修改与用户要求直接相关的字段。\n\n在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：\n\`\`\`json\n{"fieldName": "修改后完整内容"}\n\`\`\`\n字段名必须与上方字段说明中的英文名一致。如果没有字段被修改，则不要输出 JSON 代码块。`;
         apiMessages.unshift({ role: 'system', content: systemContent });
       } catch (err) {
         // Fallback: build system prompt locally if API fails
@@ -151,8 +184,8 @@ export class ChatArea {
         if (typeConfig?.fields) {
           fieldDesc = '字段说明：\n' + typeConfig.fields.filter(f => f.enabled !== false).map(f => `- ${f.key}: ${f.label}`).join('\n');
         }
-        if (currentData) {
-          systemContent += `\n当前病历内容（${tabLabel}）：\n${JSON.stringify(currentData, null, 2)}`;
+        if (Object.keys(contextData).length > 0) {
+          systemContent += `\n相关病历资料：\n${JSON.stringify(contextData, null, 2)}`;
         }
         systemContent += `\n\n你是一位经验丰富的普外科主治医师。请回答用户的问题或按其要求修改【${tabLabel}】的病历。\n\n${fieldDesc}\n\n如果用户要求修改病历，请严格按以下步骤执行：\n\n**步骤1：修改用户指定的字段**\n\n**步骤2：保持格式**\n确保每个字段保持专业医学文书格式。\n\n**原则：最小改动**\n只修改与用户要求直接相关的字段。\n\n在回复末尾附加以下格式的 JSON 代码块，包含所有被你**修改过**的字段（完整值，不是增量）：\n\`\`\`json\n{"fieldName": "修改后完整内容"}\n\`\`\`\n字段名必须与上方字段说明中的英文名一致。如果没有字段被修改，则不要输出 JSON 代码块。`;
         apiMessages.unshift({ role: 'system', content: systemContent });
@@ -161,7 +194,7 @@ export class ChatArea {
 
     try {
       // 4. Streaming call
-      const fullContent = await api.chatStream(apiMessages, (chunk) => {
+      const result = await api.chatStream(apiMessages, (chunk) => {
         const current = [...store.state.chatMessages];
         const last = current[current.length - 1];
         if (last && last.role === 'assistant') {
@@ -169,12 +202,14 @@ export class ChatArea {
           store.setState({ chatMessages: current });
         }
       });
+      const fullContent = result.text;
 
       // 5. Mark streaming as complete
       const final = [...store.state.chatMessages];
       const last = final[final.length - 1];
       if (last && last.role === 'assistant') {
         delete last.streaming;
+        if (result.stats) last.stats = result.stats;
 
         // Try to parse JSON response as EMR data
         if (store.state.currentDisease) {
@@ -244,6 +279,9 @@ export class ChatArea {
     }
     const current = store.getActiveTypeData() || {};
     store.setTypeData(activeType, { ...current, ...filtered });
+    // The record content was just modified by chat, so the previous
+    // "重新生成" stats no longer describe what is on screen.
+    store.setState({ lastGenerationStats: null });
     store.toast('info', '病历已更新');
   }
 
@@ -303,6 +341,17 @@ export class ChatArea {
           { hour: '2-digit', minute: '2-digit' },
         );
         div.appendChild(timeDiv);
+      }
+
+      // Generation stats (Ollama only; hidden in mock mode)
+      if (msg.role !== 'user' && msg.stats) {
+        const statsText = formatGenerationStats(msg.stats);
+        if (statsText) {
+          const statsDiv = document.createElement('div');
+          statsDiv.className = 'chat-stats';
+          statsDiv.textContent = `⏱ ${statsText}`;
+          div.appendChild(statsDiv);
+        }
       }
 
       this.container.appendChild(div);

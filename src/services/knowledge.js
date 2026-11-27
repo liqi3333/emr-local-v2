@@ -19,7 +19,10 @@ const fs = require('fs');
 const path = require('path');
 
 const KB_ROOT = path.join(__dirname, '../data/medical-files');
-const MAX_CHARS = 8000;
+const _maxCharsEnv = process.env.KNOWLEDGE_MAX_CHARS;
+const MAX_CHARS = _maxCharsEnv && Number.isFinite(Number(_maxCharsEnv))
+  ? Number(_maxCharsEnv)
+  : 8000;
 
 // ──────────────────────────────────────────────
 //  Path safety

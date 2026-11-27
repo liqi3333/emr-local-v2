@@ -10,6 +10,7 @@
 import { store } from '../store.js';
 import { db } from '../db.js';
 import * as api from '../services/api.js';
+import { formatGenerationStats } from '../utils/stats.js';
 
 function _normalizeValue(v) {
   if (v == null) return '';
@@ -197,6 +198,18 @@ export class EmrPreview {
       content.appendChild(section);
     }
 
+    // Generation stats (Ollama only; cleared on history load/type switch)
+    const lastStats = store.state.lastGenerationStats;
+    if (lastStats && lastStats.typeId === activeType) {
+      const statsText = formatGenerationStats(lastStats);
+      if (statsText) {
+        const statsEl = document.createElement('div');
+        statsEl.className = 'emr-stats';
+        statsEl.textContent = `本次生成：${statsText}`;
+        content.appendChild(statsEl);
+      }
+    }
+
     container.appendChild(content);
   }
 
@@ -209,47 +222,56 @@ export class EmrPreview {
       store.toast('info', '请先选择疾病');
       return;
     }
-    store.setState({ loading: true, loadingLabel: '重新生成中...' });
+    store.setState({ loading: true, loadingLabel: '重新生成中...', lastGenerationStats: null });
     try {
       const activeType = store.state.activeType;
       const disease = store.state.currentDisease;
       const patientInfo = store.state.currentPatient || {};
 
-      // Build context data from dependent types
-      const typeConfig = store.getTypeConfig(activeType);
-      const contextData = {};
-      if (typeConfig?.contextDependencies) {
-        const reg = store.state.recordRegistry;
-        if (reg) {
-          for (const depId of typeConfig.contextDependencies) {
-            for (const cat of reg.categories) {
-              const depType = cat.types.find(t => t.id === depId);
-              if (depType) {
-                const depData = store.state[depType.storeKey];
-                if (depData) contextData[depType.storeKey] = depData;
-                break;
-              }
-            }
-          }
-        }
-      }
+      // Build context from contextDependencies (e.g. firstCourse for attending)
+      const contextData = store.buildContextData(activeType);
 
-      const result = await api.generateRecord(activeType, {
-        disease,
-        patientInfo,
-        contextData,
-      });
+      // 流式生成：本地小模型边生成边反馈进度，避免长时间“无反应”
+      let lastUpdate = 0;
+      const result = await api.generateRecordStream(
+        activeType,
+        { disease, patientInfo, contextData },
+        ({ received }) => {
+          const now = Date.now();
+          if (now - lastUpdate < 400) return;
+          lastUpdate = now;
+          store.setState({ loadingLabel: `生成中… 已输出 ${received} 字` });
+        },
+      );
 
       if (result.emr) {
         store.setTypeData(activeType, result.emr);
-        store.setState({ loading: false, loadingLabel: '', error: null, currentRecordId: null });
+        store.setState({
+          loading: false,
+          loadingLabel: '',
+          error: null,
+          currentRecordId: null,
+          lastGenerationStats: result.stats
+            ? { ...result.stats, typeId: activeType }
+            : null,
+        });
         store.toast('success', '病历已更新');
       } else {
-        store.setState({ loading: false, loadingLabel: '', error: 'AI 返回空数据，请重试' });
+        store.setState({
+          loading: false,
+          loadingLabel: '',
+          error: 'AI 返回空数据，请重试',
+          lastGenerationStats: null,
+        });
         store.toast('error', '生成失败，请重试');
       }
     } catch (err) {
-      store.setState({ loading: false, loadingLabel: '', error: err.message });
+      store.setState({
+        loading: false,
+        loadingLabel: '',
+        error: err.message,
+        lastGenerationStats: null,
+      });
       store.toast('error', err.message);
     }
   }
@@ -325,6 +347,43 @@ export class EmrPreview {
     await this._saveRecord();
   }
 
+  /**
+   * Load a saved record into the store. Also restores the disease — otherwise
+   * after a page refresh the user has to click a disease (which clears all
+   * type data) before generating, wiping the record they just loaded.
+   */
+  _applyLoadedRecord(record) {
+    if (!record || !record.type) return;
+
+    const typeConfig = store.getTypeConfig(record.type);
+    const enabledKeys = new Set(
+      (typeConfig?.fields || []).filter(f => f.enabled !== false).map(f => f.key)
+    );
+
+    let content = record.content;
+    if (typeof content === 'string') {
+      try { content = JSON.parse(content); } catch { content = {}; }
+    }
+    if (!content || typeof content !== 'object' || Object.keys(content).length === 0) {
+      content = record; // fallback for legacy rows without content JSON
+    }
+
+    const filtered = {};
+    for (const [k, v] of Object.entries(content)) {
+      if (enabledKeys.size === 0 || enabledKeys.has(k)) filtered[k] = v;
+    }
+
+    if (record.disease && record.disease !== store.state.currentDisease) {
+      // Loading a record for another disease starts a fresh context, just
+      // like clicking that disease in the sidebar — otherwise stale data from
+      // the previous disease could leak into the next generation.
+      store.clearAllTypeData();
+      store.setState({ currentDisease: record.disease });
+    }
+    store.setState({ currentRecordId: record.id, lastGenerationStats: null });
+    store.setTypeData(record.type, filtered);
+  }
+
   async _showHistory() {
     const patient = store.state.currentPatient;
     if (!patient) {
@@ -396,17 +455,7 @@ export class EmrPreview {
           const recordId = btn.dataset.id;
           const record = await db.getRecordById(recordId);
           if (record) {
-            const content = typeof record.content === 'string' ? (() => { try { return JSON.parse(record.content); } catch { return {}; } })() : (record.content || {});
-            const typeConfig = store.getTypeConfig(record.type);
-            const enabledKeys = new Set(
-              (typeConfig?.fields || []).filter(f => f.enabled !== false).map(f => f.key)
-            );
-            const filtered = {};
-            for (const [k, v] of Object.entries(content)) {
-              if (enabledKeys.size === 0 || enabledKeys.has(k)) filtered[k] = v;
-            }
-            store.setState({ currentRecordId: record.id });
-            store.setTypeData(record.type, filtered);
+            this._applyLoadedRecord(record);
             close();
             store.toast('success', '已加载病历');
           }
@@ -448,14 +497,14 @@ export class EmrPreview {
       });
 
       overlay.querySelectorAll('.pm-history-card').forEach(card => {
-        card.addEventListener('click', (e) => {
+        card.addEventListener('click', async (e) => {
           if (e.target.closest('.pm-btn')) return;
           const recordId = card.dataset.id;
-          const record = records.find(r => r.id === recordId);
+          // Fetch the full row so legacy records whose `content` JSON is empty
+          // can still be rebuilt from the data columns.
+          const record = await db.getRecordById(recordId);
           if (record) {
-            const content = typeof record.content === 'string' ? (() => { try { return JSON.parse(record.content); } catch { return {}; } })() : (record.content || {});
-            store.setState({ currentRecordId: record.id });
-            store.setTypeData(record.type, content);
+            this._applyLoadedRecord(record);
             close();
             store.toast('success', '已加载病历');
           }

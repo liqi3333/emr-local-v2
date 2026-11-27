@@ -68,12 +68,20 @@ const PROVIDERS = [
     id: 'ollama',
     label: 'Ollama (本地)',
     defaultBaseUrl: 'http://localhost:11434/v1',
-    defaultModel: 'qwen2.5:1.5b',
+    defaultModel: 'qwen3:1.7b',
+    // 每个条目都会在「🧠 模型」面板中单独显示，可手动切换。
+    // 速度基于本机 CPU 推理实测（无可用 GPU）。
     models: [
-      { value: 'qwen2.5:1.5b', label: 'Qwen 2.5 1.5B' },
-      { value: 'qwen2.5:7b', label: 'Qwen 2.5 7B' },
-      { value: 'llama3.2:3b', label: 'Llama 3.2 3B' },
-      { value: 'phi3:mini', label: 'Phi-3 Mini' },
+      { value: 'qwen3:1.7b', label: 'Qwen3 1.7B（最快 · 约 2 分钟/份）' },
+      { value: 'qwen3:4b', label: 'Qwen3 4B（更细 · 约 5-6 分钟/份）' },
+      {
+        value: 'qwen3:4b-instruct-2507-q4_K_M',
+        label: 'Qwen3 4B Instruct（质量最好 · 约 6 分钟/份）',
+      },
+      {
+        value: 'qwen3-30b-a3b-instruct-2507:q4_K_M',
+        label: 'Qwen3 30B A3B Instruct（MoE · 仅 3B 激活 · 需 32GB 内存）',
+      },
     ],
   },
   {
@@ -296,48 +304,78 @@ export class SettingsPanel {
     // ── Model items from .env config — only show providers with API key ──
     const config = this._currentConfig;
     if (config) {
-      for (const prov of PROVIDERS) {
-        const providerConfig = config[prov.id];
-        if (!providerConfig) continue;
-        // Only show providers that have an API key configured
-        if (!providerConfig.apiKey) continue;
+      // 当前实际使用的模型（localStorage 中的选择优先于 .env 默认值）
+      const storedActive = loadModels().find((m) => m.id === activeId) || null;
 
+      const addProviderCard = (prov, modelValue, title, modelId) => {
         const isDefault = config.defaultProvider === prov.id;
-        const isOnlineActive = activeId !== '__offline__' && isDefault;
+        const effectiveModel = storedActive?.modelName || config[prov.id]?.model || '';
+        const isActive = activeId !== '__offline__' && isDefault && effectiveModel === modelValue;
+
         const item = document.createElement('div');
-        item.className = 'model-item' + (isOnlineActive ? ' active' : '');
-        item.dataset.modelId = `__provider__${prov.id}`;
+        item.className = 'model-item' + (isActive ? ' active' : '');
+        item.dataset.modelId = modelId;
 
         const info = document.createElement('div');
         info.className = 'info';
-        const defaultTag = (isDefault && activeId !== '__offline__')
+        const defaultTag = isActive
           ? ' <span style="color:var(--primary);font-size:11px">[当前]</span>'
           : '';
         info.innerHTML = `
-          <div class="name">${this._escapeHtml(prov.label)} — ${this._escapeHtml(providerConfig.model || '未配置模型')}${defaultTag}</div>
-          <div class="detail">${this._escapeHtml(prov.id)} · ••••••••</div>
+          <div class="name">${this._escapeHtml(title)}${defaultTag}</div>
+          <div class="detail">${this._escapeHtml(prov.id)} · ${this._escapeHtml(modelValue || '未配置模型')}</div>
         `;
         item.appendChild(info);
 
         const actions = document.createElement('div');
         actions.className = 'actions';
-        if (isDefault && activeId !== '__offline__') {
-          actions.innerHTML = `
-            <button data-action="select" title="当前选中" class="btn-active">✓</button>
-            <button data-action="edit" title="编辑">✎</button>`;
-        } else {
-          actions.innerHTML = `
-            <button data-action="select" title="设为当前模型">✓</button>
-            <button data-action="edit" title="编辑">✎</button>`;
-        }
+        actions.innerHTML = `
+          <button data-action="select" title="${isActive ? '当前选中' : '设为当前模型'}"${isActive ? ' class="btn-active"' : ''}>✓</button>
+          <button data-action="edit" title="编辑">✎</button>`;
         item.appendChild(actions);
 
         item.addEventListener('click', (e) => {
           if (e.target.closest('.actions')) return;
-          this._selectModel(`__provider__${prov.id}`);
+          this._selectModel(modelId);
         });
 
         list.appendChild(item);
+      };
+
+      for (const prov of PROVIDERS) {
+        const providerConfig = config[prov.id];
+        if (!providerConfig) continue;
+        // Only show providers that have an API key configured
+        // （ollama 是本地服务，不需要 API Key）
+        if (!providerConfig.apiKey && prov.id !== 'ollama') continue;
+
+        // Ollama 本地模型：每个已安装模型单独列一项，方便手动切换
+        let variants = null;
+        if (prov.id === 'ollama') {
+          variants = (prov.models || []).map((m) => ({ ...m }));
+          if (providerConfig.model && !variants.some((v) => v.value === providerConfig.model)) {
+            variants.unshift({ value: providerConfig.model, label: providerConfig.model });
+          }
+        }
+
+        if (!variants || variants.length === 0) {
+          addProviderCard(
+            prov,
+            providerConfig.model || '',
+            `${prov.label} — ${providerConfig.model || '未配置模型'}`,
+            `__provider__${prov.id}`,
+          );
+          continue;
+        }
+
+        for (const v of variants) {
+          addProviderCard(
+            prov,
+            v.value,
+            `${prov.label} · ${v.label}`,
+            `__provider__${prov.id}::${v.value}`,
+          );
+        }
       }
     }
     body.appendChild(list);
@@ -413,18 +451,29 @@ export class SettingsPanel {
 
     // Switch default provider in .env
     if (id.startsWith('__provider__')) {
-      const providerId = id.replace('__provider__', '');
+      // id 形如 __provider__ollama 或 __provider__ollama::qwen3:4b（指定具体本地模型）
+      const raw = id.slice('__provider__'.length);
+      const sep = raw.indexOf('::');
+      const providerId = sep === -1 ? raw : raw.slice(0, sep);
+      const pickedModel = sep === -1 ? '' : raw.slice(sep + 2);
+
       const config = await loadConfigFromBackend();
       if (config && config[providerId]) {
-        await saveConfigToBackend({ provider: providerId });
-        // Also sync to localStorage for api.js
         const providerConfig = config[providerId];
+        const modelName = pickedModel || providerConfig.model || '';
+        // 写回 .env：provider 决定 DEFAULT_PROVIDER，pickedModel 决定 *_MODEL
+        await saveConfigToBackend(
+          pickedModel
+            ? { provider: providerId, model: pickedModel }
+            : { provider: providerId },
+        );
+        // Also sync to localStorage for api.js
         const model = {
           id: 'current',
           name: providerId,
           provider: providerId,
           baseUrl: providerConfig.baseUrl || '',
-          modelName: providerConfig.model || '',
+          modelName,
           apiKey: providerConfig.apiKey || '',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -453,7 +502,10 @@ export class SettingsPanel {
 
   _editModel(id) {
     if (id.startsWith('__provider__')) {
-      const providerId = id.replace('__provider__', '');
+      const raw = id.slice('__provider__'.length);
+      const sep = raw.indexOf('::');
+      const providerId = sep === -1 ? raw : raw.slice(0, sep);
+      const pickedModel = sep === -1 ? '' : raw.slice(sep + 2);
       const config = this._currentConfig;
       if (config && config[providerId]) {
         const providerConfig = config[providerId];
@@ -462,7 +514,7 @@ export class SettingsPanel {
           name: providerId,
           provider: providerId,
           baseUrl: providerConfig.baseUrl || '',
-          modelName: providerConfig.model || '',
+          modelName: pickedModel || providerConfig.model || '',
           apiKey: providerConfig.apiKey || '',
         });
       }

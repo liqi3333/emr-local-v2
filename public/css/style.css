@@ -675,6 +675,10 @@ a:hover { text-decoration: underline; }
   color: var(--text-secondary);
   font-size: 13px;
 }
+.loading-elapsed {
+  color: var(--text-muted);
+  font-size: 12px;
+}
 .spinner {
   width: 18px; height: 18px;
   border: 2px solid var(--border);
@@ -2365,6 +2369,26 @@ kbd {
 
 .rtm-toggle input:checked + .rtm-toggle-slider {
   background: var(--accent);
+}
+
+/* ─── Generation Stats (Ollama prefill/eval) ─── */
+.emr-stats,
+.chat-stats {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  word-break: break-word;
+}
+
+.chat-stats {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top-style: dotted;
 }
 
 .rtm-toggle input:checked + .rtm-toggle-slider::before {

@@ -6,15 +6,103 @@ AI 驱动的电子病历系统，支持 **13 种病历文书**（3 大类）、�
 
 ## 快速开始
 
+> 需 Node.js 18+。首次运行自动创建 `data/emr-local.db`，无需手动配置。
+
+### Windows
+
+**方式 1：双击 `start.bat`（推荐）**
+
+自动完成依赖安装、`.env` 创建、启动服务并打开浏览器。关闭窗口即停止服务。
+
+**方式 2：cmd（命令提示符）**
+
+```cmd
+cd /d D:\path\to\emr-local-v2
+npm install
+npm start          # http://localhost:8000
+```
+
+**方式 3：PowerShell**
+
+PowerShell 默认禁止运行 `npm.ps1`，必须用 `npm.cmd`：
+
+```powershell
+cd "D:\path\to\emr-local-v2"
+npm.cmd start
+```
+
+或用 `--prefix` 免切换目录：
+
+```powershell
+npm.cmd --prefix "D:\path\to\emr-local-v2" start
+```
+
+> `npm` 只能在项目目录（含 `package.json`）下执行，否则报 `ENOENT: Could not read package.json`。
+
+### macOS / Linux
+
 ```bash
 cp .env.example .env   # 可选，无 Key 时自动使用 Mock 模式
 npm install
-npm run dev            # http://localhost:8001
+npm start              # http://localhost:8000
+npm run dev            # 开发模式：文件变更自动重启
 ```
 
-端口冲突时：`lsof -ti:8001 | xargs kill -9`
+### 常用命令
 
-> 需 Node.js 18+。首次运行自动创建 `data/emr-local.db`，无需手动配置。
+| 命令 | 说明 |
+|------|------|
+| `npm start` | 启动服务（生产用法） |
+| `npm run dev` | 启动并监听文件变更自动重启 |
+| `Ctrl+C` | 停止服务（在运行窗口内） |
+
+### 端口 8000 被占用
+
+Windows（cmd）：
+
+```cmd
+netstat -ano | findstr :8000
+taskkill /F /PID <占用进程的PID>
+```
+
+Windows（PowerShell）：
+
+```powershell
+Get-NetTCPConnection -LocalPort 8000 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+```
+
+macOS / Linux：
+
+```bash
+lsof -ti:8000 | xargs kill -9
+```
+
+### 本地模型（Ollama）
+
+使用本地模型时，**Ollama 必须处于运行状态**（Windows 默认开机自启，可开始菜单手动启动）。
+
+`.env` 中的关键配置：
+
+```env
+OLLAMA_BASE_URL=http://localhost:11434/v1   # 必须带 /v1（OpenAI 兼容接口）
+OLLAMA_MODEL=qwen3:1.7b                     # 当前使用的本地模型
+OLLAMA_THINK=false                          # 关闭「先思考再回答」，CPU 推理快 2-3 倍
+DEFAULT_PROVIDER=ollama
+```
+
+- 可在界面右上角「🧠 模型」中直接切换本地模型，写入 `.env` 且**无需重启**
+- 手动修改 `.env` 后需**重启服务**才生效
+- 本地模型选项（实测于 i3-12100 / 16GB 单通道，仅供参考）：
+
+| 模型 | 一份病历耗时 | 说明 |
+|------|------|------|
+| `qwen3:1.7b` | 约 2 分钟 | 最快，日常推荐 |
+| `qwen3:4b-instruct-2507-q4_K_M` | 约 6 分钟 | 质量更好，输出规整 |
+| `qwen3:4b` | 约 5-6 分钟 | 思考型，关思考后输出易啰嗦，不推荐 |
+
+### 数据与备份
+
+所有病历、注册表、模型配置持久化在 `data/emr-local.db`（SQLite）。备份时直接复制该文件；`.env` 存放 API Key，不入库、不提交版本库。
 
 ---
 
@@ -40,6 +128,7 @@ npm run dev            # http://localhost:8001
 ```
 emr-local-v2/
 ├── server.js                 # Express 入口
+├── start.bat                 # Windows 一键启动脚本
 ├── src/
 │   ├── routes/               # API 路由（crud / api / prompts / recordTypes / diseases / knowledge / evolution / settings）
 │   ├── services/             # 服务层（database / ai / ai-mock / promptTemplates / recordRegistry / diseaseRegistry / knowledge / templateEvolution / envWriter）
@@ -76,10 +165,10 @@ RAG_AUTO_ROUTE=false
 
 | 页面 | 访问路径 |
 |------|----------|
-| 主界面 | `http://localhost:8001` |
-| 提示词编辑器 | `http://localhost:8001/prompts` |
-| 病历类型配置 | `http://localhost:8001/record-types` |
-| 疾病目录管理 | `http://localhost:8001/diseases` |
+| 主界面 | `http://localhost:8000` |
+| 提示词编辑器 | `http://localhost:8000/prompts` |
+| 病历类型配置 | `http://localhost:8000/record-types` |
+| 疾病目录管理 | `http://localhost:8000/diseases` |
 
 ---
 
@@ -99,7 +188,7 @@ RAG_AUTO_ROUTE=false
 
 | 分类 | 主要端点 |
 |------|----------|
-| **病历生成** | `POST /api/records/:typeId/generate`（统一入口） |
+| **病历生成** | `POST /api/records/:typeId/generate`（统一入口）<br>`POST /api/records/:typeId/generate/stream`（SSE 流式，适合本地小模型） |
 | **模板** | `GET /api/templates/:key/:disease`（统一入口） |
 | **患者 CRUD** | `GET/POST /api/patients` `PUT/DELETE /api/patients/:id` |
 | **病历 CRUD** | `GET /api/records?...` `POST /api/records` |

@@ -42,13 +42,20 @@ function extractDisease(text) {
 function mockAttendingRound(text, context) {
   const disease = extractDisease(text);
 
+  // Prefer the dependent firstCourse data passed by the API. Older code only
+  // parsed it out of the prompt text, so mock mode never inherited anything.
   let emrData = {};
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*"chief"[\s\S]*\}/);
-    if (jsonMatch) {
-      emrData = JSON.parse(jsonMatch[0]);
-    }
-  } catch { /* ignore parse errors */ }
+  const ctxEmr = context && context.emrData;
+  if (ctxEmr && typeof ctxEmr === 'object' && (ctxEmr.chief || ctxEmr.hpi || ctxEmr.diag)) {
+    emrData = ctxEmr;
+  } else {
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*"chief"[\s\S]*\}/);
+      if (jsonMatch) {
+        emrData = JSON.parse(jsonMatch[0]);
+      }
+    } catch { /* ignore parse errors */ }
+  }
 
   const summary = emrData.chief
     ? `1. 患者信息：患者因"${emrData.chief}"入院\n2. 入院诊断：${emrData.diag || disease}\n3. 主诉：${emrData.chief}\n4. 现病史：${(emrData.hpi || "").slice(0, 100)}...\n5. 查体：${(emrData.exam || "").slice(0, 80)}...\n6. 辅查：${(emrData.lab || "").slice(0, 80)}...\n7. 目前治疗：待完善`

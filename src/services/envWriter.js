@@ -36,8 +36,8 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 
 OLLAMA_API_KEY=
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_MODEL=qwen3:1.7b
 
 # 服务端默认提供商 (openai / claude / gemini / deepseek / ollama)
 DEFAULT_PROVIDER=openai

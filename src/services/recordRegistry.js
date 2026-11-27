@@ -128,6 +128,79 @@ function migrateLegacyTypes() {
   }
 }
 
+// ──────────────────────────────────────────────
+//  One-time migration: strict linear dependency chain
+//  attending → chief → discussion → preop → surgery
+//  Each step only receives the immediately preceding record instead of all
+//  earlier records being injected again. 术前讨论 also moves before 术前小结
+//  in the type list so the tab order matches the chain.
+// ──────────────────────────────────────────────
+
+const DEPENDENCY_CHAIN_MIGRATION_KEY = 'migration_dependency_chain_v3';
+const DEPENDENCY_CHAIN = {
+  chiefRound: ['attendingRound'],
+  discussion: ['chiefRound'],
+  preop: ['discussion'],
+  surgery: ['discussion'],
+};
+const CHIEF_SUMMARY_OLD = '综合首次病程录和主治查房内容';
+const CHIEF_SUMMARY_NEW = '基于主治查房内容';
+
+function migrateDependencyChain() {
+  // Run only once so later edits made in the RecordTypeManager are preserved.
+  if (db.getSetting(DEPENDENCY_CHAIN_MIGRATION_KEY) === 'done') return false;
+
+  const registry = getRegistry();
+  if (!registry) return false;
+
+  let changed = false;
+  for (const cat of registry.categories || []) {
+    if (!Array.isArray(cat.types)) continue;
+
+    for (const type of cat.types) {
+      const nextDeps = DEPENDENCY_CHAIN[type.id];
+      if (nextDeps) {
+        if (JSON.stringify(type.contextDependencies || []) !== JSON.stringify(nextDeps)) {
+          type.contextDependencies = nextDeps;
+          changed = true;
+        }
+      }
+      if (type.id === 'discussion' && type.sortOrder !== 3) {
+        type.sortOrder = 3;
+        changed = true;
+      }
+      if (type.id === 'preop' && type.sortOrder !== 4) {
+        type.sortOrder = 4;
+        changed = true;
+      }
+      if (type.id === 'chiefRound') {
+        const summaryField = (type.fields || []).find(f => f.key === 'chiefSummary');
+        if (summaryField
+            && typeof summaryField.description === 'string'
+            && summaryField.description.includes(CHIEF_SUMMARY_OLD)) {
+          summaryField.description = summaryField.description.replace(CHIEF_SUMMARY_OLD, CHIEF_SUMMARY_NEW);
+          changed = true;
+        }
+      }
+    }
+
+    // Keep the tab order consistent with the dependency chain:
+    // 术前讨论 must render before 术前小结.
+    const discussionIdx = cat.types.findIndex(t => t.id === 'discussion');
+    const preopIdx = cat.types.findIndex(t => t.id === 'preop');
+    if (discussionIdx !== -1 && preopIdx !== -1 && discussionIdx > preopIdx) {
+      const [discussion] = cat.types.splice(discussionIdx, 1);
+      const insertAt = cat.types.findIndex(t => t.id === 'preop');
+      cat.types.splice(insertAt, 0, discussion);
+      changed = true;
+    }
+  }
+
+  if (changed) saveRegistry(registry);
+  db.setSetting(DEPENDENCY_CHAIN_MIGRATION_KEY, 'done');
+  return changed;
+}
+
 module.exports = {
   getDefaultRegistry,
   getRegistry,
@@ -138,4 +211,5 @@ module.exports = {
   findTypeByTemplateKey,
   validateRegistry,
   migrateLegacyTypes,
+  migrateDependencyChain,
 };

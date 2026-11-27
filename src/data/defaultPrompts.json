@@ -36,7 +36,7 @@
     },
     "chief": {
       "label": "主任查房",
-      "rolePrompt": "你是一位经验丰富的普外科主任医师。请基于以下病历资料，生成一份主任医师首次查房病程记录。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主任医师。请基于以下主治查房记录，生成一份主任医师首次查房病程记录。{{patientContext}}{{attendingDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
         "chiefSummary": { "label": "病情摘要" },
@@ -50,7 +50,7 @@
     },
     "preop": {
       "label": "术前小结",
-      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前小结。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下术前讨论记录，生成一份术前小结。{{patientContext}}{{discussionDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
         "preopDiagnosis": { "label": "术前诊断" },
@@ -65,7 +65,7 @@
     },
     "discussion": {
       "label": "术前讨论",
-      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下病历资料，生成一份术前讨论记录。{{patientContext}}{{emrDataContext}}{{attendingDataContext}}{{preopDataContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科主治医师。请基于以下主任查房记录，生成一份术前讨论记录。{{patientContext}}{{chiefDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
         "discussionParticipants": { "label": "参加人员" },
@@ -80,7 +80,7 @@
     },
     "surgery": {
       "label": "手术记录",
-      "rolePrompt": "你是一位经验丰富的普外科手术医师。请基于以下病历资料，生成一份手术记录。{{patientContext}}{{emrDataContext}}{{preopDataContext}}",
+      "rolePrompt": "你是一位经验丰富的普外科手术医师。请基于以下术前讨论记录，生成一份手术记录。{{patientContext}}{{discussionDataContext}}",
       "outputFormat": "以严格的 JSON 格式返回（不要包含 markdown 代码块标记），包含以下字段：",
       "fields": {
         "surgeryName": { "label": "手术名称" },
